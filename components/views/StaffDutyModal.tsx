@@ -10,8 +10,6 @@ import {
   Calendar,
   Clock,
   User,
-  FileText,
-  TrendingUp,
   Activity
 } from 'lucide-react';
 
@@ -22,21 +20,24 @@ interface StaffDutyModalProps {
   selectedUnit?: 'all' | 'main' | 'acad' | 'recovery';
 }
 
-export default function StaffDutyModal({ isOpen, onClose, onNavigateToRoster, selectedUnit = 'all' }: StaffDutyModalProps) {
+export default function StaffDutyModal({
+  isOpen,
+  onClose,
+  onNavigateToRoster,
+  selectedUnit = 'all'
+}: StaffDutyModalProps) {
   const [showAvailableStaff, setShowAvailableStaff] = useState(false);
-  const [selectedDate, setSelectedDate] = useState('today');
+  const [selectedDate, setSelectedDate] = useState<'today' | 'week' | 'month'>('today');
 
   if (!isOpen) return null;
 
+  // ---- Demo data (unchanged) ----
   const staffSummary = {
     totalOnDuty: 156,
     onBreak: 7,
     arrivingLate: 3,
     sickToday: 5,
-    vacantShifts: {
-      tomorrow: 2,
-      next7Days: 8
-    }
+    vacantShifts: { tomorrow: 2, next7Days: 8 }
   };
 
   const sickStaff = [
@@ -64,7 +65,7 @@ export default function StaffDutyModal({ isOpen, onClose, onNavigateToRoster, se
       lastSickness: '2024-08-10 - Stomach bug (2 days)',
       status: 'covered',
       coverBy: 'ODP R. Thompson (Internal)',
-      shiftsCovered: ['DSU Theatre 5: 07:00-15:00']
+      shiftsCovered: ['DSU Theatre 5: 08:00-18:00']
     },
     {
       name: 'Dr. A. Patel',
@@ -110,7 +111,7 @@ export default function StaffDutyModal({ isOpen, onClose, onNavigateToRoster, se
       name: 'Dr. F. James',
       role: 'Consultant Anaesthetist',
       assignedTo: 'Main Theatre 1',
-      scheduledStart: '07:00',
+      scheduledStart: '08:00',
       expectedArrival: '09:15',
       reason: 'Managing emergency in Theatre 5',
       cover: 'Dr. S. Patel (Locum) - confirmed',
@@ -130,7 +131,7 @@ export default function StaffDutyModal({ isOpen, onClose, onNavigateToRoster, se
       name: 'RN L. Anderson',
       role: 'Scrub N/P',
       assignedTo: 'DSU Theatre 8',
-      scheduledStart: '07:00',
+      scheduledStart: '08:00',
       expectedArrival: '07:45',
       reason: 'Childcare issue',
       cover: 'ODP M. Wilson covering',
@@ -150,7 +151,7 @@ export default function StaffDutyModal({ isOpen, onClose, onNavigateToRoster, se
       date: '23 Oct',
       shifts: [
         { role: 'HCA', department: 'Main Theatre 1', time: '08:00-16:00', priority: 'medium', availableCover: 8 },
-        { role: 'Anaes N/P', department: 'DSU Theatre 7', time: '07:00-15:00', priority: 'high', availableCover: 2 }
+        { role: 'Anaes N/P', department: 'DSU Theatre 7', time: '08:00-18:00', priority: 'high', availableCover: 2 }
       ]
     },
     {
@@ -162,7 +163,7 @@ export default function StaffDutyModal({ isOpen, onClose, onNavigateToRoster, se
     }
   ];
 
-  // Filter staff based on selected unit
+  // ---- Unit filters (unchanged) ----
   const filteredSickStaff = sickStaff.filter(staff => {
     if (selectedUnit === 'all') return true;
     if (selectedUnit === 'recovery') return staff.department === 'Recovery';
@@ -179,289 +180,291 @@ export default function StaffDutyModal({ isOpen, onClose, onNavigateToRoster, se
     return true;
   });
 
-  const filteredVacantShifts = vacantShifts.map(dateGroup => ({
-    ...dateGroup,
-    shifts: dateGroup.shifts.filter(shift => {
-      if (selectedUnit === 'all') return true;
-      if (selectedUnit === 'recovery') return shift.department?.includes('Recovery');
-      if (selectedUnit === 'main') return shift.department?.startsWith('Main Theatre') || shift.department?.includes('Main Recovery');
-      if (selectedUnit === 'acad') return shift.department?.startsWith('DSU Theatre');
-      return true;
-    })
-  })).filter(dateGroup => dateGroup.shifts.length > 0);
+  const filteredVacantShifts = vacantShifts
+    .map(dateGroup => ({
+      ...dateGroup,
+      shifts: dateGroup.shifts.filter(shift => {
+        if (selectedUnit === 'all') return true;
+        if (selectedUnit === 'recovery') return shift.department?.includes('Recovery');
+        if (selectedUnit === 'main')
+          return shift.department?.startsWith('Main Theatre') || shift.department?.includes('Main Recovery');
+        if (selectedUnit === 'acad') return shift.department?.startsWith('DSU Theatre');
+        return true;
+      })
+    }))
+    .filter(dateGroup => dateGroup.shifts.length > 0);
 
   return (
-    <div className="fixed inset-0 bg-gray-100 bg-opacity-95 flex items-center justify-center z-50">
-      <div className="bg-white shadow-xl w-full h-full overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-green-600 to-green-700 text-white p-3 flex items-center justify-between flex-shrink-0">
-          <div>
-            <h2 className="text-lg font-bold">Staff on Duty - Overview</h2>
-            <p className="text-green-100 text-xs mt-1">
-              Current staffing levels, sickness tracking & vacant shifts
-            </p>
+    <div
+      className="fixed inset-0 z-50 bg-white lg:bg-black lg:bg-opacity-40 lg:backdrop-blur-sm flex items-stretch justify-center"
+      style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Staff on duty overview"
+    >
+      <div className="bg-white lg:rounded-2xl lg:shadow-2xl w-full lg:max-w-5xl h-full lg:h-[90vh] overflow-hidden flex flex-col">
+        {/* Sticky top header */}
+        <div className="sticky top-0 z-20 bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 text-white px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
+          <div className="min-w-0">
+            <h2 className="text-base sm:text-lg font-bold truncate">Staff on Duty</h2>
+            <p className="text-blue-100 text-[11px] sm:text-xs">Current levels & coverage</p>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-green-800 rounded-lg transition-colors"
-          >
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-blue-800/60" aria-label="Close">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Main Content Area - Flex Row */}
-        <div className="flex flex-1 overflow-hidden">
-          {/* Left Sidebar - Stats (Fixed, Compact) */}
-          <div className="w-48 bg-gray-50 border-r border-gray-200 p-3 flex-shrink-0 overflow-y-auto">
-            <div className="space-y-2">
-              <div className="bg-white rounded-lg p-2 border border-gray-200">
-                <p className="text-[10px] text-gray-600 mb-1">Total On Duty</p>
-                <p className="text-lg font-bold text-green-600">{staffSummary.totalOnDuty}</p>
+        {/* Scrollable column */}
+        <div className="flex-1 overflow-y-auto">
+          {/* 1) STAFFING SUMMARY (first) */}
+          <section className="px-4 sm:px-6 pt-3 pb-2">
+            <h3 className="text-sm font-semibold text-gray-800 mb-2">Staffing Summary</h3>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-3 border border-green-200">
+                <p className="text-[10px] font-semibold text-green-700 uppercase tracking-wide">Total On Duty</p>
+                <p className="text-2xl sm:text-3xl font-bold text-green-700">{staffSummary.totalOnDuty}</p>
               </div>
-              <div className="bg-white rounded-lg p-2 border border-gray-200">
-                <p className="text-[10px] text-gray-600 mb-1">On Break</p>
-                <p className="text-lg font-bold text-blue-600">{staffSummary.onBreak}</p>
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-3 border border-blue-200">
+                <p className="text-[10px] font-semibold text-blue-700 uppercase tracking-wide">On Break</p>
+                <p className="text-2xl sm:text-3xl font-bold text-blue-700">{staffSummary.onBreak}</p>
               </div>
-              <div className="bg-white rounded-lg p-2 border border-gray-200">
-                <p className="text-[10px] text-gray-600 mb-1">Arriving Late</p>
-                <p className="text-lg font-bold text-orange-600">{staffSummary.arrivingLate}</p>
+              <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg p-3 border border-amber-200">
+                <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-wide">Arriving Late</p>
+                <p className="text-2xl sm:text-3xl font-bold text-amber-700">{staffSummary.arrivingLate}</p>
               </div>
-              <div className="bg-white rounded-lg p-2 border border-gray-200">
-                <p className="text-[10px] text-gray-600 mb-1">Sick Today</p>
-                <p className="text-lg font-bold text-red-600">{staffSummary.sickToday}</p>
+              <div className="bg-gradient-to-br from-rose-50 to-red-50 rounded-lg p-3 border border-rose-200">
+                <p className="text-[10px] font-semibold text-rose-700 uppercase tracking-wide">Sick Today</p>
+                <p className="text-2xl sm:text-3xl font-bold text-rose-700">{staffSummary.sickToday}</p>
               </div>
-              <div className="bg-white rounded-lg p-2 border border-gray-200">
-                <p className="text-[10px] text-gray-600 mb-1">Vacant Shifts (7d)</p>
-                <p className="text-lg font-bold text-purple-600">{staffSummary.vacantShifts.next7Days}</p>
+              <div className="bg-gradient-to-br from-purple-50 to-violet-50 rounded-lg p-3 border border-purple-200">
+                <p className="text-[10px] font-semibold text-purple-700 uppercase tracking-wide">Vacant Shifts (7d)</p>
+                <p className="text-2xl sm:text-3xl font-bold text-purple-700">{staffSummary.vacantShifts.next7Days}</p>
+              </div>
+            </div>
+          </section>
+
+          {/* 2) TITLE BAR (second) */}
+          <section className="px-4 sm:px-6 pt-2 pb-3">
+            <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 rounded-lg text-white px-4 py-3 sm:px-5 sm:py-4 flex items-center justify-between">
+              <div className="min-w-0">
+                <h3 className="text-base sm:text-lg font-bold truncate">Staff on Duty – Overview</h3>
+                <p className="text-blue-100 text-[11px] sm:text-xs mt-0.5">
+                  Current staffing levels, sickness tracking & vacant shifts
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* 3) STICKY FILTERS */}
+          <div className="sticky top-[48px] sm:top-[56px] z-10 bg-white/95 backdrop-blur border-y border-gray-200">
+            <div className="px-4 sm:px-6 py-2 flex flex-col gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Activity className="w-3 h-3 text-gray-500" />
+                <span className="text-[11px] font-medium text-gray-700">View:</span>
+                {(['today', 'week', 'month'] as const).map((key) => (
+                  <button
+                    key={key}
+                    onClick={() => setSelectedDate(key)}
+                    className={`px-2 py-1 rounded text-[11px] font-medium transition-colors ${
+                      selectedDate === key ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {key === 'today' ? 'Today' : key === 'week' ? 'This Week' : 'This Month'}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <User className="w-3 h-3 text-gray-500" />
+                <span className="text-[11px] font-medium text-gray-700">Options:</span>
+                <button
+                  onClick={() => setShowAvailableStaff(!showAvailableStaff)}
+                  className={`px-2 py-1 rounded text-[11px] font-medium transition-colors ${
+                    showAvailableStaff ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {showAvailableStaff ? 'Hide' : 'Show'} Available Staff
+                </button>
+                <button
+                  onClick={() => onNavigateToRoster?.()}
+                  className="px-2 py-1 rounded text-[11px] font-medium bg-purple-600 text-white hover:bg-purple-700 transition-colors"
+                >
+                  Go to Staff Roster →
+                </button>
               </div>
             </div>
           </div>
 
-          {/* Right Content Area */}
-          <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Filters - Compact, at top */}
-            <div className="p-2 bg-white border-b border-gray-200 flex-shrink-0">
-              <div className="flex flex-col space-y-2">
-                <div className="flex items-center space-x-2 flex-wrap">
-                  <Activity className="w-3 h-3 text-gray-500" />
-                  <span className="text-xs font-medium text-gray-700">View:</span>
-                  <button
-                    onClick={() => setSelectedDate('today')}
-                    className={`px-2 py-1 rounded text-[10px] font-medium transition-colors ${
-                      selectedDate === 'today'
-                        ? 'bg-green-600 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    Today
-                  </button>
-                  <button
-                    onClick={() => setSelectedDate('week')}
-                    className={`px-2 py-1 rounded text-[10px] font-medium transition-colors ${
-                      selectedDate === 'week'
-                        ? 'bg-green-600 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    This Week
-                  </button>
-                  <button
-                    onClick={() => setSelectedDate('month')}
-                    className={`px-2 py-1 rounded text-[10px] font-medium transition-colors ${
-                      selectedDate === 'month'
-                        ? 'bg-green-600 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    This Month
-                  </button>
-                </div>
-                <div className="flex items-center space-x-2 flex-wrap">
-                  <User className="w-3 h-3 text-gray-500" />
-                  <span className="text-xs font-medium text-gray-700">Options:</span>
-                  <button
-                    onClick={() => setShowAvailableStaff(!showAvailableStaff)}
-                    className={`px-2 py-1 rounded text-[10px] font-medium transition-colors ${
-                      showAvailableStaff
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    {showAvailableStaff ? 'Hide' : 'Show'} Available Staff
-                  </button>
-                  <button
-                    onClick={() => onNavigateToRoster?.()}
-                    className="px-2 py-1 rounded text-[10px] font-medium bg-purple-600 text-white hover:bg-purple-700 transition-colors"
-                  >
-                    Go to Staff Roster →
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Content - Scrollable */}
-            <div className="flex-1 overflow-y-auto">
-              <div className="space-y-3">
-                {/* Sickness Tracking */}
-                <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                  <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center">
-                    <AlertTriangle className="w-4 h-4 mr-2 text-red-600" />
-                    Sickness Today ({filteredSickStaff.length} staff)
-                  </h3>
-                  <div className="space-y-2">
-                    {filteredSickStaff.map((staff, idx) => (
-                      <div key={idx} className="bg-white rounded-lg p-3 border border-gray-200">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center space-x-2 mb-2">
-                              <h4 className="font-semibold text-gray-900 text-sm">{staff.name}</h4>
-                              <span className="text-xs text-gray-500">•</span>
-                              <span className="text-xs text-gray-600">{staff.role}</span>
-                              <span className={`px-2 py-1 rounded text-xs font-medium ${
-                                staff.status === 'covered'
-                                  ? 'bg-green-100 text-green-700'
-                                  : 'bg-red-100 text-red-700'
-                              }`}>
-                                {staff.status === 'covered' ? '✓ Covered' : '⚠ Gap'}
-                              </span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                              <div>
-                                <span className="text-gray-600">Reason:</span>
-                                <span className="ml-2 font-medium text-gray-900">{staff.reason}</span>
-                              </div>
-                              <div>
-                                <span className="text-gray-600">Expected Return:</span>
-                                <span className="ml-2 font-medium text-gray-900">{staff.expectedReturn}</span>
-                              </div>
-                              <div>
-                                <span className="text-gray-600">Episodes (YTD):</span>
-                                <span className="ml-2 font-medium text-gray-900">{staff.episodes}</span>
-                              </div>
-                              <div>
-                                <span className="text-gray-600">Last Sickness:</span>
-                                <span className="ml-2 text-gray-700">{staff.lastSickness}</span>
-                              </div>
-                            </div>
-                            {staff.status === 'covered' ? (
-                              <div className="mt-2 bg-green-50 rounded p-2 text-xs">
-                                <CheckCircle className="w-3 h-3 inline text-green-600 mr-1" />
-                                <span className="font-medium text-green-900">Covered by: {staff.coverBy}</span>
-                                <div className="mt-1 text-[10px] text-green-700 ml-4">
-                                  {staff.shiftsCovered.join(', ')}
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="mt-2 bg-red-50 rounded p-2 text-xs flex items-center">
-                                <XCircle className="w-3 h-3 text-red-600 mr-2" />
-                                <span className="font-medium text-red-900">Coverage gap - requires urgent action</span>
+          {/* 4) CONTENT SECTIONS */}
+          <div className="px-4 sm:px-6 py-3 space-y-3">
+            {/* Sickness Today */}
+            <section className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center">
+                <AlertTriangle className="w-4 h-4 mr-2 text-red-600" />
+                Sickness Today ({filteredSickStaff.length} staff)
+              </h3>
+              <div className="space-y-2">
+                {filteredSickStaff.map((staff, idx) => (
+                  <div key={idx} className="bg-white rounded-lg p-3 border border-gray-200">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <h4 className="font-semibold text-gray-900 text-sm">{staff.name}</h4>
+                          <span className="text-xs text-gray-500">•</span>
+                          <span className="text-xs text-gray-600">{staff.role}</span>
+                          <span
+                            className={`px-2 py-1 rounded text-xs font-medium ${
+                              staff.status === 'covered' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                            }`}
+                          >
+                            {staff.status === 'covered' ? '✓ Covered' : '⚠ Gap'}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                          <div>
+                            <span className="text-gray-600">Reason:</span>
+                            <span className="ml-2 font-medium text-gray-900">{staff.reason}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Expected Return:</span>
+                            <span className="ml-2 font-medium text-gray-900">{staff.expectedReturn}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Episodes (YTD):</span>
+                            <span className="ml-2 font-medium text-gray-900">{staff.episodes}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Last Sickness:</span>
+                            <span className="ml-2 text-gray-700">{staff.lastSickness}</span>
+                          </div>
+                        </div>
+                        {staff.status === 'covered' ? (
+                          <div className="mt-2 bg-green-50 rounded p-2 text-xs">
+                            <CheckCircle className="w-3 h-3 inline text-green-600 mr-1" />
+                            <span className="font-medium text-green-900">Covered by: {staff.coverBy}</span>
+                            {staff.shiftsCovered.length > 0 && (
+                              <div className="mt-1 text-[10px] text-green-700 ml-4">
+                                {staff.shiftsCovered.join(', ')}
                               </div>
                             )}
                           </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Arriving Late */}
-                <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                  <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center">
-                    <Clock className="w-4 h-4 mr-2 text-orange-600" />
-                    Arriving Late ({filteredArrivingLate.length} staff)
-                  </h3>
-                  <div className="space-y-2">
-                    {filteredArrivingLate.map((staff, idx) => (
-                      <div key={idx} className="bg-orange-50 rounded-lg p-3 border border-orange-200">
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-semibold text-gray-900 text-sm">{staff.name} - {staff.role}</h4>
-                          <span className="text-xs text-orange-700 font-medium">
-                            Due: {staff.scheduledStart} → ETA: {staff.expectedArrival}
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 text-xs">
-                          <div>
-                            <span className="text-gray-600">Assigned:</span>
-                            <span className="ml-2 font-medium">{staff.assignedTo}</span>
+                        ) : (
+                          <div className="mt-2 bg-red-50 rounded p-2 text-xs flex items-center">
+                            <XCircle className="w-3 h-3 text-red-600 mr-2" />
+                            <span className="font-medium text-red-900">Coverage gap - requires urgent action</span>
                           </div>
-                          <div>
-                            <span className="text-gray-600">Reason:</span>
-                            <span className="ml-2">{staff.reason}</span>
-                          </div>
-                          <div className="col-span-2">
-                            <span className="text-gray-600">Cover:</span>
-                            <span className="ml-2 text-green-700 font-medium">{staff.cover}</span>
-                          </div>
-                          <div className="col-span-2">
-                            <span className="text-gray-600">Impact:</span>
-                            <span className="ml-2">{staff.impact}</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Vacant Shifts */}
-                <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                  <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center">
-                    <Calendar className="w-4 h-4 mr-2 text-purple-600" />
-                    Vacant Shifts - Next 7 Days
-                  </h3>
-                  <div className="space-y-2">
-                    {filteredVacantShifts.map((day, idx) => (
-                      <div key={idx} className="bg-purple-50 rounded-lg p-3 border border-purple-200">
-                        <h4 className="font-semibold text-purple-900 mb-2 text-sm">{day.date}</h4>
-                        <div className="space-y-2">
-                          {day.shifts.map((shift, shiftIdx) => (
-                            <div key={shiftIdx} className="bg-white rounded p-2 border border-purple-200">
-                              <div className="flex items-center justify-between">
-                                <div className="flex-1">
-                                  <div className="flex items-center space-x-2 mb-1">
-                                    <span className={`px-2 py-1 rounded text-[10px] font-medium ${
-                                      shift.priority === 'urgent' ? 'bg-red-100 text-red-700' :
-                                      shift.priority === 'high' ? 'bg-orange-100 text-orange-700' :
-                                      'bg-yellow-100 text-yellow-700'
-                                    }`}>
-                                      {shift.priority.toUpperCase()}
-                                    </span>
-                                    <span className="font-medium text-gray-900 text-xs">{shift.role}</span>
-                                    <span className="text-gray-500">•</span>
-                                    <span className="text-xs text-gray-600">{shift.department}</span>
-                                  </div>
-                                  <div className="text-xs text-gray-600">
-                                    {shift.time} • {shift.availableCover} staff available to cover
-                                  </div>
-                                </div>
-                                {shift.availableCover === 0 && (
-                                  <span className="text-red-600 font-medium text-xs flex items-center">
-                                    <XCircle className="w-3 h-3 mr-1" />
-                                    No cover available!
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {showAvailableStaff && (
-                    <div className="mt-3 bg-blue-50 rounded-lg p-3 border border-blue-200">
-                      <h4 className="font-semibold text-blue-900 mb-2 text-sm">Available Bank/Agency Staff</h4>
-                      <div className="grid grid-cols-3 gap-2 text-xs">
-                        {['RN K. Martinez', 'ODP R. Thompson', 'RN L. Davis', 'HCA M. Wilson', 'ODP S. Ahmed', 'RN P. Robinson'].map((name, idx) => (
-                          <div key={idx} className="bg-white rounded p-2 border border-blue-200 text-center">
-                            {name}
-                          </div>
-                        ))}
+                        )}
                       </div>
                     </div>
-                  )}
-                </div>
+                  </div>
+                ))}
               </div>
-            </div>
+            </section>
+
+            {/* Arriving Late */}
+            <section className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center">
+                <Clock className="w-4 h-4 mr-2 text-orange-600" />
+                Arriving Late ({filteredArrivingLate.length} staff)
+              </h3>
+              <div className="space-y-2">
+                {filteredArrivingLate.map((staff, idx) => (
+                  <div key={idx} className="bg-orange-50 rounded-lg p-3 border border-orange-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-semibold text-gray-900 text-sm">
+                        {staff.name} - {staff.role}
+                      </h4>
+                      <span className="text-xs text-orange-700 font-medium">
+                        Due: {staff.scheduledStart} → ETA: {staff.expectedArrival}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <span className="text-gray-600">Assigned:</span>
+                        <span className="ml-2 font-medium">{staff.assignedTo}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Reason:</span>
+                        <span className="ml-2">{staff.reason}</span>
+                      </div>
+                      <div className="col-span-2">
+                        <span className="text-gray-600">Cover:</span>
+                        <span className="ml-2 text-green-700 font-medium">{staff.cover}</span>
+                      </div>
+                      <div className="col-span-2">
+                        <span className="text-gray-600">Impact:</span>
+                        <span className="ml-2">{staff.impact}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* Vacant Shifts */}
+            <section className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center">
+                <Calendar className="w-4 h-4 mr-2 text-purple-600" />
+                Vacant Shifts - Next 7 Days
+              </h3>
+              <div className="space-y-2">
+                {filteredVacantShifts.map((day, idx) => (
+                  <div key={idx} className="bg-purple-50 rounded-lg p-3 border border-purple-200">
+                    <h4 className="font-semibold text-purple-900 mb-2 text-sm">{day.date}</h4>
+                    <div className="space-y-2">
+                      {day.shifts.map((shift, shiftIdx) => (
+                        <div key={shiftIdx} className="bg-white rounded p-2 border border-purple-200">
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span
+                                  className={`px-2 py-1 rounded text-[10px] font-medium ${
+                                    shift.priority === 'urgent'
+                                      ? 'bg-red-100 text-red-700'
+                                      : shift.priority === 'high'
+                                      ? 'bg-orange-100 text-orange-700'
+                                      : 'bg-yellow-100 text-yellow-700'
+                                  }`}
+                                >
+                                  {shift.priority.toUpperCase()}
+                                </span>
+                                <span className="font-medium text-gray-900 text-xs">{shift.role}</span>
+                                <span className="text-gray-500">•</span>
+                                <span className="text-xs text-gray-600">{shift.department}</span>
+                              </div>
+                              <div className="text-xs text-gray-600">
+                                {shift.time} • {shift.availableCover} staff available to cover
+                              </div>
+                            </div>
+                            {shift.availableCover === 0 && (
+                              <span className="text-red-600 font-medium text-xs flex items-center">
+                                <XCircle className="w-3 h-3 mr-1" />
+                                No cover available!
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {showAvailableStaff && (
+                <div className="mt-3 bg-blue-50 rounded-lg p-3 border border-blue-200">
+                  <h4 className="font-semibold text-blue-900 mb-2 text-sm">Available Bank/Agency Staff</h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                    {['RN K. Martinez', 'ODP R. Thompson', 'RN L. Davis', 'HCA M. Wilson', 'ODP S. Ahmed', 'RN P. Robinson'].map(
+                      (name, idx) => (
+                        <div key={idx} className="bg-white rounded p-2 border border-blue-200 text-center">
+                          {name}
+                        </div>
+                      )
+                    )}
+                  </div>
+                </div>
+              )}
+            </section>
           </div>
         </div>
       </div>

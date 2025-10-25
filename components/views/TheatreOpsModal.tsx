@@ -10,7 +10,8 @@ import {
   Filter,
   Calendar,
   User,
-  FileText
+  FileText,
+  BarChart3
 } from 'lucide-react';
 
 interface TheatreOpsModalProps {
@@ -22,19 +23,24 @@ interface TheatreOpsModalProps {
 type IssueType = 'operational' | 'clinical' | 'escalation';
 type FilterPeriod = 'today' | 'week' | 'month';
 
-export default function TheatreOpsModal({ isOpen, onClose, selectedUnit = 'all' }: TheatreOpsModalProps) {
+export default function TheatreOpsModal({
+  isOpen,
+  onClose,
+  selectedUnit = 'all',
+}: TheatreOpsModalProps) {
   const [selectedFilter, setSelectedFilter] = useState<IssueType | 'all'>('all');
   const [selectedPeriod, setSelectedPeriod] = useState<FilterPeriod>('today');
   const [selectedIssue, setSelectedIssue] = useState<any>(null);
 
   if (!isOpen) return null;
 
+  // ---- Demo data (unchanged) ----
   const operationalSummary = {
     runningTheatres: 24,
     totalTheatres: 26,
     casesCompleted: 47,
     casesUnderway: 18,
-    casesScheduled: 89
+    casesScheduled: 89,
   };
 
   const issues = [
@@ -53,9 +59,9 @@ export default function TheatreOpsModal({ isOpen, onClose, selectedUnit = 'all' 
       impact: 'Theatre closed for 75 minutes',
       previousOccurrences: [
         { date: '2024-10-15', theatre: 'Main Theatre 2', issue: 'Same sensor issue', resolvedBy: 'J. Chen' },
-        { date: '2024-09-28', theatre: 'Main Theatre 5', issue: 'Pressure sensor fault', resolvedBy: 'K. Williams' }
+        { date: '2024-09-28', theatre: 'Main Theatre 5', issue: 'Pressure sensor fault', resolvedBy: 'K. Williams' },
       ],
-      notes: 'Sensor replaced. Preventative maintenance scheduled for all machines'
+      notes: 'Sensor replaced. Preventative maintenance scheduled for all machines',
     },
     {
       id: 2,
@@ -64,13 +70,13 @@ export default function TheatreOpsModal({ isOpen, onClose, selectedUnit = 'all' 
       description: 'Unpopulated list - No cases booked',
       theatre: 'Main Theatre 7',
       raisedBy: 'System Auto-flagged',
-      raisedAt: '07:00',
+      raisedAt: '08:00',
       status: 'acknowledged',
       assignedTo: 'Theatre Coordinator',
       priority: 'low',
       impact: 'Theatre available for emergency cases',
       previousOccurrences: [],
-      notes: 'Staff reallocated to other theatres'
+      notes: 'Staff reallocated to other theatres',
     },
     {
       id: 3,
@@ -85,7 +91,7 @@ export default function TheatreOpsModal({ isOpen, onClose, selectedUnit = 'all' 
       priority: 'medium',
       impact: '45 minute delay to list',
       previousOccurrences: [],
-      notes: 'Patient observed. BP stabilized. Consultant approval obtained. Surgery proceeded'
+      notes: 'Patient observed. BP stabilized. Consultant approval obtained. Surgery proceeded',
     },
     {
       id: 4,
@@ -100,9 +106,9 @@ export default function TheatreOpsModal({ isOpen, onClose, selectedUnit = 'all' 
       priority: 'urgent',
       impact: '15 min delay - alternative implant sourced',
       previousOccurrences: [
-        { date: '2024-10-10', theatre: 'Main Theatre 1', issue: 'Knee implant stockout', resolvedBy: 'Procurement' }
+        { date: '2024-10-10', theatre: 'Main Theatre 1', issue: 'Knee implant stockout', resolvedBy: 'Procurement' },
       ],
-      notes: 'Escalated to supply chain. Emergency stock protocol activated'
+      notes: 'Escalated to supply chain. Emergency stock protocol activated',
     },
     {
       id: 5,
@@ -117,222 +123,305 @@ export default function TheatreOpsModal({ isOpen, onClose, selectedUnit = 'all' 
       priority: 'high',
       impact: 'HDU bed secured - No delay to next case',
       previousOccurrences: [],
-      notes: 'Patient transferred to HDU. Next case started on time'
-    }
+      notes: 'Patient transferred to HDU. Next case started on time',
+    },
   ];
 
-  const filteredIssues = issues.filter(issue => {
-    // First filter by type
+  const filteredIssues = issues.filter((issue) => {
     if (selectedFilter !== 'all' && issue.type !== selectedFilter) return false;
-
-    // Then filter by unit
-    if (selectedUnit === 'all') return true;
-    if (selectedUnit === 'recovery') return false; // No operational issues in recovery view
+    if (selectedUnit === 'recovery') return false;
     if (selectedUnit === 'main') return issue.theatre.startsWith('Main Theatre');
     if (selectedUnit === 'acad') return issue.theatre.startsWith('DSU Theatre');
-
-    return true;
+    return true; // 'all'
   });
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'resolved': return 'bg-green-100 text-green-700 border-green-300';
-      case 'in-progress': return 'bg-blue-100 text-blue-700 border-blue-300';
-      case 'acknowledged': return 'bg-yellow-100 text-yellow-700 border-yellow-300';
-      default: return 'bg-gray-100 text-gray-700 border-gray-300';
+      case 'resolved':
+        return 'bg-green-100 text-green-700 border-green-300';
+      case 'in-progress':
+        return 'bg-blue-100 text-blue-700 border-blue-300';
+      case 'acknowledged':
+        return 'bg-yellow-100 text-yellow-700 border-yellow-300';
+      default:
+        return 'bg-gray-100 text-gray-700 border-gray-300';
     }
   };
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'urgent': return 'bg-red-100 text-red-700';
-      case 'high': return 'bg-orange-100 text-orange-700';
-      case 'medium': return 'bg-yellow-100 text-yellow-700';
-      case 'low': return 'bg-gray-100 text-gray-700';
-      default: return 'bg-gray-100 text-gray-700';
+      case 'urgent':
+        return 'bg-red-100 text-red-700';
+      case 'high':
+        return 'bg-orange-100 text-orange-700';
+      case 'medium':
+        return 'bg-yellow-100 text-yellow-700';
+      case 'low':
+        return 'bg-gray-100 text-gray-700';
+      default:
+        return 'bg-gray-100 text-gray-700';
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-100 bg-opacity-95 flex items-center justify-center z-50">
-      <div className="bg-white shadow-xl w-full h-full overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-3 flex items-center justify-between flex-shrink-0">
-          <div>
-            <h2 className="text-lg font-bold">Theatre Operations Summary</h2>
-            <p className="text-blue-100 text-xs mt-1">Live operational status and issue tracking</p>
+    <div
+      className="fixed inset-0 z-50 bg-white lg:bg-black lg:bg-opacity-40 lg:backdrop-blur-sm flex items-stretch justify-center"
+      style={{
+        paddingTop: 'env(safe-area-inset-top)',
+        paddingBottom: 'env(safe-area-inset-bottom)',
+      }}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Theatre operations summary"
+    >
+      {/* Modal shell */}
+      <div className="bg-white lg:rounded-2xl lg:shadow-2xl w-full lg:max-w-5xl h-full lg:h-[90vh] overflow-hidden flex flex-col">
+        {/* Top header (sticky) */}
+        <div className="sticky top-0 z-20 bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 text-white px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
+          <div className="min-w-0">
+            <h2 className="text-base sm:text-lg font-bold truncate">Theatre Operations</h2>
+            <p className="text-blue-100 text-[11px] sm:text-xs">Live status & issues</p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-blue-800 rounded-lg transition-colors"
+            className="p-2 rounded-lg hover:bg-blue-800/60"
+            aria-label="Close"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Main Content Area - Flex Row */}
-        <div className="flex flex-1 overflow-hidden">
-          {/* Left Sidebar - Stats (Fixed, Compact) */}
-          <div className="w-48 bg-gray-50 border-r border-gray-200 p-3 flex-shrink-0 overflow-y-auto">
-            <div className="space-y-2">
-              <div className="bg-white rounded-lg p-2 border border-gray-200">
-                <p className="text-[10px] text-gray-600 mb-1">Running Theatres</p>
-                <p className="text-lg font-bold text-green-600">
-                  {operationalSummary.runningTheatres}/{operationalSummary.totalTheatres}
+        {/* Scrollable content column */}
+        <div className="flex-1 overflow-y-auto">
+          {/* SUMMARY STATS (now first, full width) */}
+          <section className="px-4 sm:px-6 pt-3 pb-2">
+            <h3 className="text-sm font-semibold text-gray-800 mb-2">Summary Stats</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-3 border border-green-200">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-[10px] font-semibold text-green-700 uppercase tracking-wide">
+                    Running Theatres
+                  </p>
+                  <Activity className="w-4 h-4 text-green-600" />
+                </div>
+                <p className="text-2xl sm:text-3xl font-bold text-green-700">
+                  {operationalSummary.runningTheatres}
+                  <span className="text-lg text-green-500">
+                    /{operationalSummary.totalTheatres}
+                  </span>
+                </p>
+                <div className="w-full bg-green-200 rounded-full h-1.5 mt-2">
+                  <div
+                    className="bg-green-600 h-1.5 rounded-full"
+                    style={{
+                      width: `${
+                        (operationalSummary.runningTheatres /
+                          operationalSummary.totalTheatres) *
+                        100
+                      }%`,
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-3 border border-blue-200">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-[10px] font-semibold text-blue-700 uppercase tracking-wide">
+                    Cases Completed
+                  </p>
+                  <CheckCircle className="w-4 h-4 text-blue-600" />
+                </div>
+                <p className="text-2xl sm:text-3xl font-bold text-blue-700">
+                  {operationalSummary.casesCompleted}
                 </p>
               </div>
-              <div className="bg-white rounded-lg p-2 border border-gray-200">
-                <p className="text-[10px] text-gray-600 mb-1">Cases Completed</p>
-                <p className="text-lg font-bold text-blue-600">{operationalSummary.casesCompleted}</p>
+
+              <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-lg p-3 border border-orange-200">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-[10px] font-semibold text-orange-700 uppercase tracking-wide">
+                    Cases Underway
+                  </p>
+                  <Activity className="w-4 h-4 text-orange-600" />
+                </div>
+                <p className="text-2xl sm:text-3xl font-bold text-orange-700">
+                  {operationalSummary.casesUnderway}
+                </p>
               </div>
-              <div className="bg-white rounded-lg p-2 border border-gray-200">
-                <p className="text-[10px] text-gray-600 mb-1">Cases Underway</p>
-                <p className="text-lg font-bold text-orange-600">{operationalSummary.casesUnderway}</p>
+
+              <div className="bg-gradient-to-br from-slate-50 to-gray-50 rounded-lg p-3 border border-gray-200">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-[10px] font-semibold text-gray-700 uppercase tracking-wide">
+                    Total Scheduled
+                  </p>
+                  <BarChart3 className="w-4 h-4 text-gray-600" />
+                </div>
+                <p className="text-2xl sm:text-3xl font-bold text-gray-700">
+                  {operationalSummary.casesScheduled}
+                </p>
               </div>
-              <div className="bg-white rounded-lg p-2 border border-gray-200">
-                <p className="text-[10px] text-gray-600 mb-1">Total Scheduled</p>
-                <p className="text-lg font-bold text-gray-700">{operationalSummary.casesScheduled}</p>
+            </div>
+          </section>
+
+          {/* THEATRE OPERATIONS SUMMARY (title under stats) */}
+          <section className="px-4 sm:px-6 pt-2 pb-3">
+            <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 rounded-lg text-white px-4 py-3 sm:px-5 sm:py-4 flex items-center justify-between">
+              <div className="min-w-0">
+                <h3 className="text-base sm:text-lg font-bold truncate">Theatre Operations Summary</h3>
+                <p className="text-blue-100 text-[11px] sm:text-xs mt-0.5">
+                  Live operational status and issue tracking
+                </p>
               </div>
-              <div className="bg-white rounded-lg p-2 border border-gray-200">
-                <p className="text-[10px] text-gray-600 mb-1">Active Issues</p>
-                <p className="text-lg font-bold text-red-600">{issues.filter(i => i.status !== 'resolved').length}</p>
+            </div>
+          </section>
+
+          {/* FILTERS (sticky just below summary title for quick access) */}
+          <div className="sticky top-[48px] sm:top-[56px] z-10 bg-white/95 backdrop-blur border-y border-gray-200">
+            <div className="px-4 sm:px-6 py-2 flex flex-col gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Filter className="w-3 h-3 text-gray-500" />
+                <span className="text-[11px] font-medium text-gray-700">Type:</span>
+                {(['all', 'operational', 'clinical', 'escalation'] as const).map((filter) => (
+                  <button
+                    key={filter}
+                    onClick={() => setSelectedFilter(filter)}
+                    className={`px-2 py-1 rounded text-[11px] font-medium transition-colors ${
+                      selectedFilter === filter
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {filter.charAt(0).toUpperCase() + filter.slice(1)}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Calendar className="w-3 h-3 text-gray-500" />
+                <span className="text-[11px] font-medium text-gray-700">Period:</span>
+                {(['today', 'week', 'month'] as const).map((period) => (
+                  <button
+                    key={period}
+                    onClick={() => setSelectedPeriod(period)}
+                    className={`px-2 py-1 rounded text-[11px] font-medium transition-colors ${
+                      selectedPeriod === period
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {period.charAt(0).toUpperCase() + period.slice(1)}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
 
-          {/* Right Content Area */}
-          <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Filters - Compact, at top */}
-            <div className="p-2 bg-white border-b border-gray-200 flex-shrink-0">
-              <div className="flex flex-col space-y-2">
-                <div className="flex items-center space-x-2 flex-wrap">
-                  <Filter className="w-3 h-3 text-gray-500" />
-                  <span className="text-xs font-medium text-gray-700">Type:</span>
-                  {(['all', 'operational', 'clinical', 'escalation'] as const).map((filter) => (
-                    <button
-                      key={filter}
-                      onClick={() => setSelectedFilter(filter)}
-                      className={`px-2 py-1 rounded text-[10px] font-medium transition-colors ${
-                        selectedFilter === filter
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
-                      {filter.charAt(0).toUpperCase() + filter.slice(1)}
-                    </button>
-                  ))}
-                </div>
-                <div className="flex items-center space-x-2 flex-wrap">
-                  <Calendar className="w-3 h-3 text-gray-500" />
-                  <span className="text-xs font-medium text-gray-700">Period:</span>
-                  {(['today', 'week', 'month'] as const).map((period) => (
-                    <button
-                      key={period}
-                      onClick={() => setSelectedPeriod(period)}
-                      className={`px-2 py-1 rounded text-[10px] font-medium transition-colors ${
-                        selectedPeriod === period
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
-                      {period.charAt(0).toUpperCase() + period.slice(1)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Issues List - Scrollable */}
-            <div className="flex-1 overflow-y-auto">
-          <div className="space-y-3">
-            {filteredIssues.map((issue) => (
-              <div
-                key={issue.id}
-                onClick={() => setSelectedIssue(selectedIssue?.id === issue.id ? null : issue)}
-                className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-all cursor-pointer"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-2 mb-2">
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${getPriorityColor(issue.priority)}`}>
-                        {issue.priority.toUpperCase()}
-                      </span>
-                      <span className={`px-2 py-1 rounded text-xs font-medium border ${getStatusColor(issue.status)}`}>
-                        {issue.status.replace('-', ' ').toUpperCase()}
-                      </span>
-                      <span className="text-xs text-gray-500">{issue.theatre}</span>
-                    </div>
-                    <h3 className="font-semibold text-gray-900 mb-1">{issue.title}</h3>
-                    <p className="text-sm text-gray-600 mb-2">{issue.description}</p>
-                    <div className="flex items-center space-x-4 text-xs text-gray-500">
-                      <span className="flex items-center">
-                        <User className="w-3 h-3 mr-1" />
-                        Raised by: {issue.raisedBy}
-                      </span>
-                      <span className="flex items-center">
-                        <Clock className="w-3 h-3 mr-1" />
-                        {issue.raisedAt}
-                      </span>
-                      {issue.previousOccurrences.length > 0 && (
-                        <span className="flex items-center text-orange-600 font-medium">
-                          <AlertTriangle className="w-3 h-3 mr-1" />
-                          {issue.previousOccurrences.length} previous occurrence{issue.previousOccurrences.length > 1 ? 's' : ''}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Expanded Details */}
-                {selectedIssue?.id === issue.id && (
-                  <div className="mt-4 pt-4 border-t border-gray-200 space-y-3">
-                    <div className="bg-blue-50 rounded p-3">
-                      <p className="text-xs font-semibold text-blue-900 mb-1">Impact</p>
-                      <p className="text-sm text-blue-800">{issue.impact}</p>
-                    </div>
-
-                    {issue.notes && (
-                      <div className="bg-gray-50 rounded p-3">
-                        <p className="text-xs font-semibold text-gray-700 mb-1 flex items-center">
-                          <FileText className="w-3 h-3 mr-1" />
-                          Notes
+          {/* ISSUES LIST */}
+          <section className="px-0">
+            <ul className="divide-y divide-gray-200">
+              {filteredIssues.map((issue) => (
+                <li key={issue.id} className="bg-white">
+                  <button
+                    onClick={() =>
+                      setSelectedIssue(selectedIssue?.id === issue.id ? null : issue)
+                    }
+                    className="w-full text-left p-4 hover:bg-gray-50 focus:outline-none"
+                    aria-expanded={selectedIssue?.id === issue.id}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-medium ${getPriorityColor(
+                              issue.priority
+                            )}`}
+                          >
+                            {issue.priority.toUpperCase()}
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-medium border ${getStatusColor(
+                              issue.status
+                            )}`}
+                          >
+                            {issue.status.replace('-', ' ').toUpperCase()}
+                          </span>
+                          <span className="text-[11px] text-gray-500 truncate">
+                            {issue.theatre}
+                          </span>
+                        </div>
+                        <h4 className="text-sm font-semibold text-gray-900 mb-0.5 truncate">
+                          {issue.title}
+                        </h4>
+                        <p className="text-[13px] text-gray-600 mb-1 line-clamp-2 sm:line-clamp-none">
+                          {issue.description}
                         </p>
-                        <p className="text-sm text-gray-700">{issue.notes}</p>
-                      </div>
-                    )}
-
-                    {issue.resolvedBy && (
-                      <div className="bg-green-50 rounded p-3">
-                        <p className="text-xs font-semibold text-green-900 mb-1">Resolution</p>
-                        <p className="text-sm text-green-800">
-                          Resolved by {issue.resolvedBy} at {issue.resolvedAt}
-                        </p>
-                      </div>
-                    )}
-
-                    {issue.previousOccurrences.length > 0 && (
-                      <div className="bg-orange-50 rounded p-3">
-                        <p className="text-xs font-semibold text-orange-900 mb-2 flex items-center">
-                          <AlertTriangle className="w-3 h-3 mr-1" />
-                          Previous Occurrences
-                        </p>
-                        <div className="space-y-2">
-                          {issue.previousOccurrences.map((occurrence, idx) => (
-                            <div key={idx} className="text-xs text-orange-800 pl-4 border-l-2 border-orange-300">
-                              <p className="font-medium">{occurrence.date} - {occurrence.theatre}</p>
-                              <p>{occurrence.issue} • Resolved by: {occurrence.resolvedBy}</p>
-                            </div>
-                          ))}
+                        <div className="flex items-center gap-4 text-[11px] text-gray-500 flex-wrap">
+                          <span className="flex items-center">
+                            <User className="w-3 h-3 mr-1" /> Raised by: {issue.raisedBy}
+                          </span>
+                          <span className="flex items-center">
+                            <Clock className="w-3 h-3 mr-1" /> {issue.raisedAt}
+                          </span>
+                          {issue.previousOccurrences.length > 0 && (
+                            <span className="flex items-center text-orange-600 font-medium">
+                              <AlertTriangle className="w-3 h-3 mr-1" />
+                              {issue.previousOccurrences.length} prev
+                            </span>
+                          )}
                         </div>
                       </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-            </div>
-          </div>
+                    </div>
+                  </button>
+
+                  {/* Expanded details */}
+                  {selectedIssue?.id === issue.id && (
+                    <div className="px-4 pb-4 space-y-3">
+                      <div className="bg-blue-50 rounded p-3">
+                        <p className="text-[11px] font-semibold text-blue-900 mb-1">Impact</p>
+                        <p className="text-[13px] text-blue-800">{issue.impact}</p>
+                      </div>
+                      {issue.notes && (
+                        <div className="bg-gray-50 rounded p-3">
+                          <p className="text-[11px] font-semibold text-gray-700 mb-1 flex items-center">
+                            <FileText className="w-3 h-3 mr-1" /> Notes
+                          </p>
+                          <p className="text-[13px] text-gray-700">{issue.notes}</p>
+                        </div>
+                      )}
+                      {issue.resolvedBy && (
+                        <div className="bg-green-50 rounded p-3">
+                          <p className="text-[11px] font-semibold text-green-900 mb-1">Resolution</p>
+                          <p className="text-[13px] text-green-800">
+                            Resolved by {issue.resolvedBy} at {issue.resolvedAt}
+                          </p>
+                        </div>
+                      )}
+                      {issue.previousOccurrences.length > 0 && (
+                        <div className="bg-orange-50 rounded p-3">
+                          <p className="text-[11px] font-semibold text-orange-900 mb-2 flex items-center">
+                            <AlertTriangle className="w-3 h-3 mr-1" /> Previous Occurrences
+                          </p>
+                          <div className="space-y-2">
+                            {issue.previousOccurrences.map((occurrence, idx) => (
+                              <div
+                                key={idx}
+                                className="text-[12px] text-orange-800 pl-3 border-l-2 border-orange-300"
+                              >
+                                <p className="font-medium">
+                                  {occurrence.date} - {occurrence.theatre}
+                                </p>
+                                <p>
+                                  {occurrence.issue} • Resolved by: {occurrence.resolvedBy}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
         </div>
       </div>
     </div>

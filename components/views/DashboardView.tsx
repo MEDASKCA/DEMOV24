@@ -1,32 +1,28 @@
-'use client';
+"use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Activity,
   Users,
   Clock,
-  AlertTriangle,
   TrendingUp,
-  Package,
   Calendar,
-  CheckCircle,
-  XCircle,
-  AlertCircle,
-  Coffee,
-  UserCheck,
   ChevronRight,
-  ChevronDown,
-  ChevronUp
+  ChevronLeft
 } from 'lucide-react';
+
 import TheatreTimelineModal from './TheatreTimelineModal';
 import StaffReliefModal from './StaffReliefModal';
 import StaffHoverCard from './StaffHoverCard';
 import StaffCompetencyModal from './StaffCompetencyModal';
+import StaffInfoMobileModal from './StaffInfoMobileModal';
 import TheatreOpsModal from './TheatreOpsModal';
 import StaffDutyModal from './StaffDutyModal';
 import TurnoverTimeModal from './TurnoverTimeModal';
 import EfficiencyScoreModal from './EfficiencyScoreModal';
 import { Bell } from 'lucide-react';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 
 export default function DashboardView() {
   const [selectedTheatre, setSelectedTheatre] = useState<string | null>(null);
@@ -37,1545 +33,457 @@ export default function DashboardView() {
   const [hoverPosition, setHoverPosition] = useState({ x: 0, y: 0 });
   const [showCompetencyModal, setShowCompetencyModal] = useState(false);
   const [selectedStaffForCompetency, setSelectedStaffForCompetency] = useState<any>(null);
+  const [showMobileStaffInfo, setShowMobileStaffInfo] = useState(false);
   const [selectedUnit, setSelectedUnit] = useState<'all' | 'main' | 'acad' | 'recovery'>('all');
   const [showTheatreOpsModal, setShowTheatreOpsModal] = useState(false);
   const [showStaffDutyModal, setShowStaffDutyModal] = useState(false);
   const [showTurnoverModal, setShowTurnoverModal] = useState(false);
   const [showEfficiencyModal, setShowEfficiencyModal] = useState(false);
+  const [theatreAllocations, setTheatreAllocations] = useState<any[]>([]);
+  const [isLoadingAllocations, setIsLoadingAllocations] = useState(true);
 
-  // Live clock state - synchronized with Theatre Schedule date (October 21, 2024)
+  // --- Date helpers ---
+  const makeDateStr = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+  const [selectedDate, setSelectedDate] = useState<string>(() => makeDateStr(new Date()));
   const [currentTime, setCurrentTime] = useState(new Date());
   const [mounted, setMounted] = useState(false);
+  const isTodaySelected = selectedDate === makeDateStr(new Date());
 
-  // Prevent hydration mismatch
-  React.useEffect(() => {
-    setMounted(true);
+  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    const t = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(t);
   }, []);
 
-  // Update clock every second
-  React.useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
+  // Relative date label: Today / Yesterday / N days ago / In N days
+  const relativeDateLabel = () => {
+    const today = new Date();
+    const sel = new Date(selectedDate + 'T00:00:00');
+    const diffDays = Math.round((sel.getTime() - new Date(makeDateStr(today) + 'T00:00:00').getTime()) / (1000 * 60 * 60 * 24));
 
-    return () => clearInterval(timer);
-  }, []);
-
-  // Format date and time - using current date
-  const formatDateTime = () => {
-    if (!mounted) {
-      // Return placeholder during server-side rendering
-      return { date: 'Loading...', time: '00:00:00' };
-    }
-
-    const dateStr = currentTime.toLocaleDateString('en-GB', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-
-    const timeStr = currentTime.toLocaleTimeString('en-GB', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    });
-
-    return { date: dateStr, time: timeStr };
+    if (diffDays === 0) return 'Today';
+    if (diffDays === -1) return 'Yesterday';
+    if (diffDays < -1) return `${Math.abs(diffDays)} days ago`;
+    if (diffDays === 1) return 'Tomorrow';
+    return `In ${diffDays} days`;
   };
 
-  // Helper function to add professional titles to staff names
-  const addStaffTitle = (name: string, role: string): string => {
-    if (name === 'VACANT' || !name) return name;
-
-    // If name already has a title (Mr., Ms., Dr., RN, ODP), return as is
-    if (name.match(/^(Mr\.|Ms\.|Dr\.|RN|ODP)\s/)) return name;
-
-    // Add title based on role
-    if (role.includes('Consultant') || role.includes('Assistant')) {
-      // Surgeons get Mr. or Ms. - using Mr. as default
-      return `Mr. ${name}`;
-    } else if (role.includes('Anaesthetist')) {
-      return `Dr. ${name}`;
-    } else if (role.includes('Nurse') || role.includes('Practitioner')) {
-      // Nurses and practitioners - check if they already have RN or ODP prefix
-      // If not, add RN as default
-      if (!name.startsWith('RN ') && !name.startsWith('ODP ')) {
-        return `RN ${name}`;
+  useEffect(() => {
+    const fetchTheatreAllocations = async () => {
+      if (!db) {
+        console.warn('Firestore not initialized - using demo data');
+        setIsLoadingAllocations(false);
+        return;
       }
-    }
+      try {
+        const q = query(collection(db, 'theatreAllocations'), where('date', '==', selectedDate));
+        const snap = await getDocs(q);
+        const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+        data.sort((a: any, b: any) => a.theatreNumber - b.theatreNumber);
 
-    return name;
+        const mapped = data.map((alloc: any) => ({
+          theatre: alloc.theatreName,
+          unit: alloc.unit,
+          specialty: 'General Surgery',
+          session: alloc.sessionType ? `${alloc.sessionType.startTime} - ${alloc.sessionType.endTime}` : '08:00 - 20:00',
+          sessionsCount: alloc.sessionType?.sessionCount || 0,
+          casesCompleted: alloc.status === 'in-use' ? 1 : 0,
+          status: alloc.status === 'in-use' ? 'surgery_started' : alloc.status,
+          patientStatus: alloc.status === 'in-use' ? 'Surgery Started' : alloc.status === 'ready' ? 'Ready' : 'CLOSED',
+          currentProcedure: alloc.status === 'in-use' ? 'Surgery in Progress' : '',
+          nextCase: alloc.status === 'ready' ? 'Next Case Scheduled' : '',
+          surgeryStartTime: alloc.status === 'in-use' ? '08:50' : '',
+          estimatedFinish: alloc.status === 'in-use' ? '10:30' : '',
+          reliefRequired: alloc.reliefRequired || false,
+          team: {
+            surgeon: { name: alloc.team?.surgeon?.name || 'VACANT', shift: alloc.team?.surgeon?.shift || '' },
+            assistant: { name: alloc.team?.assistant?.name || 'VACANT', shift: alloc.team?.assistant?.shift || '' },
+            anaesthetist: { name: alloc.team?.anaesthetist?.name || 'VACANT', shift: alloc.team?.anaesthetist?.shift || '' },
+            anaesNP: { name: alloc.team?.anaesNP?.name || 'VACANT', shift: alloc.team?.anaesNP?.shift || '' },
+            scrubNP1: { name: alloc.team?.scrubNP1?.name || 'VACANT', shift: alloc.team?.scrubNP1?.shift || '', scrubbed: alloc.team?.scrubNP1?.scrubbed || false, etf: alloc.team?.scrubNP1?.scrubbed ? '10:30' : undefined },
+            scrubNP2: { name: alloc.team?.scrubNP2?.name || 'VACANT', shift: alloc.team?.scrubNP2?.shift || '' },
+            hca: { name: alloc.team?.hca?.name || 'VACANT', shift: alloc.team?.hca?.shift || '' }
+          },
+          alerts: alloc.status === 'closed' ? 'THEATRE CLOSED - No cases scheduled' : ''
+        }));
+
+        setTheatreAllocations(mapped);
+        setIsLoadingAllocations(false);
+      } catch (e) {
+        console.error('Error fetching theatre allocations:', e);
+        setIsLoadingAllocations(false);
+      }
+    };
+    fetchTheatreAllocations();
+  }, [selectedDate]);
+
+  const changeDate = (days: number) => {
+    const d = new Date(selectedDate);
+    d.setDate(d.getDate() + days);
+    setSelectedDate(makeDateStr(d));
+  };
+  const goToToday = () => setSelectedDate(makeDateStr(new Date()));
+
+  const formatTime = () => {
+    if (!mounted) return '00:00:00';
+    return currentTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  };
+
+  // ——— Titles helper (with HCA rule) ———
+  const addStaffTitle = (name: string, role: string): string => {
+    if (!name || name === 'VACANT') return name;
+    const stripped = name.replace(/^(Mr\.|Mrs\.|Ms\.|Dr\.|RN|ODP|HCA)\s+/i, '').trim();
+    if (/healthcare assistant/i.test(role) || /^hca\b/i.test(role)) {
+      return `HCA ${stripped}`;
+    }
+    if (/^(Mr\.|Mrs\.|Ms\.|Dr\.|RN|ODP)\s+/i.test(name)) return name;
+    if (/Consultant|Assistant/i.test(role)) return `Mr. ${stripped}`;
+    if (/Anaesthetist/i.test(role)) return `Dr. ${stripped}`;
+    if (/Nurse|Practitioner/i.test(role)) return `RN ${stripped}`;
+    return stripped;
   };
 
   const handleTheatreClick = (theatreName: string) => {
     setSelectedTheatre(theatreName);
     setShowTimeline(true);
   };
-
   const handleReliefRequest = (staffName: string, role: string, theatre: string) => {
     setSelectedStaffForRelief({ name: staffName, role, theatre });
     setShowReliefModal(true);
   };
-
-  const handleStaffHover = (event: React.MouseEvent, staffName: string, role: string) => {
+  const handleStaffHover = (e: React.MouseEvent, staffName: string, role: string) => {
     setHoveredStaff({ name: staffName, role, id: staffName });
-    setHoverPosition({ x: event.clientX, y: event.clientY });
+    setHoverPosition({ x: e.clientX, y: e.clientY });
   };
-
   const handleStaffClick = (staffName: string, role: string, theatre: string) => {
     setSelectedStaffForCompetency({ name: staffName, role, theatre });
-    setShowCompetencyModal(true);
+    if (window.innerWidth < 1024) setShowMobileStaffInfo(true); else setShowCompetencyModal(true);
   };
 
-  // Helper function to check if staff needs relief (working > 10 hours without proper breaks)
-  const needsRelief = (startTime: string, currentTime: string = '16:30') => {
-    // Simple check - if started at 08:00 and it's now 16:30+, highlight
-    return startTime === '08:00';
-  };
-
-  // Helper function to calculate duration between two times
-  const calculateDuration = (startTime: string, endTime: string) => {
-    if (!startTime || !endTime) return '';
-
-    const [startHour, startMin] = startTime.split(':').map(Number);
-    const [endHour, endMin] = endTime.split(':').map(Number);
-
-    const startMinutes = startHour * 60 + startMin;
-    const endMinutes = endHour * 60 + endMin;
-
-    const durationMinutes = endMinutes - startMinutes;
-    const hours = Math.floor(durationMinutes / 60);
-    const minutes = durationMinutes % 60;
-
-    if (hours > 0 && minutes > 0) {
-      return `${hours}h ${minutes}min`;
-    } else if (hours > 0) {
-      return `${hours}h`;
-    } else {
-      return `${minutes}min`;
-    }
-  };
-
-  const theatreAllocations = [
-    {
-      theatre: 'Main Theatre 1',
-      specialty: 'Elective Orthopaedics',
-      session: '08:00 - 20:00',
-      sessionsCount: 3,
-      casesCompleted: 1,
-      status: 'surgery_started',
-      patientStatus: 'Surgery Started',
-      currentProcedure: 'Total Hip Replacement',
-      nextCase: 'Knee Arthroscopy',
-      surgeryStartTime: '08:50',
-      estimatedFinish: '10:30',
-      team: {
-        surgeon: { name: 'J. Smith', shift: '08:00 - 18:00' },
-        assistant: { name: 'A. Gallagher', shift: '08:00 - 16:00' },
-        anaesthetist: { name: 'F. James ☕', shift: '08:00 - 20:00' },
-        anaesNP: { name: 'L. O\'Brien', shift: '10:00 - 18:00' },
-        scrubNP1: { name: 'RN A. Flores', shift: '08:00 - 20:00', scrubbed: true, etf: '10:30' },
-        scrubNP2: { name: 'ODP D. Jordan', shift: '08:00 - 18:00', scrubbed: false },
-        hca: { name: 'T. Chikukwe', shift: '08:00 - 16:00' }
-      },
-      alerts: 'F. James on break (15 min)'
-    },
-    {
-      theatre: 'Main Theatre 2',
-      specialty: 'General Surgery',
-      session: 'CLOSED',
-      sessionsCount: 0,
-      status: 'closed',
-      team: {
-        surgeon: { name: 'VACANT', shift: '' },
-        assistant: { name: 'VACANT', shift: '' },
-        anaesthetist: { name: 'VACANT', shift: '' },
-        anaesNP: { name: 'VACANT', shift: '' },
-        scrubNP1: { name: 'VACANT', shift: '' },
-        scrubNP2: { name: 'VACANT', shift: '' },
-        hca: { name: 'VACANT', shift: '' }
-      },
-      alerts: 'THEATRE CLOSED - Unpopulated list, no cases scheduled',
-      closureReason: 'No surgical cases booked for today'
-    },
-    {
-      theatre: 'Main Theatre 3',
-      specialty: 'Cardiac Surgery',
-      session: '08:00 - 18:00',
-      sessionsCount: 2,
-      casesCompleted: 0,
-      status: 'surgery_started',
-      patientStatus: 'Surgery Started',
-      currentProcedure: 'CABG x4',
-      nextCase: 'Aortic Valve Replacement',
-      surgeryStartTime: '09:00',
-      estimatedFinish: '14:30',
-      team: {
-        surgeon: { name: 'R. Johnson', shift: '08:00 - 18:00' },
-        assistant: { name: 'T. Wilson', shift: '08:00 - 18:00' },
-        anaesthetist: { name: 'B. Thompson', shift: '07:00 - 19:00' },
-        anaesNP: { name: 'H. Adams', shift: '08:00 - 16:00' },
-        scrubNP1: { name: 'RN M. Garcia ☕', shift: '08:00 - 20:00', scrubbed: true, etf: '14:30', relievedBy: 'RN L. Brown', relievedFrom: 'Main Theatre 3', relievedAt: '09:30' },
-        scrubNP2: { name: 'RN L. Brown', shift: '08:00 - 18:00', scrubbed: false },
-        scrubNP3: { name: 'ODP K. White', shift: '10:00 - 20:00', scrubbed: false },
-        hca: { name: 'S. Ali', shift: '08:00 - 16:00' }
-      },
-      alerts: 'M. Garcia break taken (30 min)'
-    },
-    {
-      theatre: 'Main Theatre 4',
-      specialty: 'Neurosurgery',
-      session: '08:00 - 18:00',
-      sessionsCount: 2,
-      casesCompleted: 0,
-      status: 'patient_sent',
-      patientStatus: 'Sent For',
-      currentProcedure: 'Craniotomy',
-      nextCase: 'Spinal Decompression',
-      surgeryStartTime: '',
-      estimatedFinish: '13:00',
-      team: {
-        surgeon: { name: 'A. Robertson', shift: '08:00 - 18:00' },
-        assistant: { name: 'C. Lewis', shift: '08:00 - 18:00' },
-        anaesthetist: { name: 'D. Mitchell', shift: '08:00 - 20:00' },
-        anaesNP: { name: 'E. Cooper', shift: '08:00 - 18:00' },
-        scrubNP1: { name: 'ODP F. Harrison', shift: '08:00 - 20:00', scrubbed: false },
-        scrubNP2: { name: 'RN G. Walker', shift: '08:00 - 18:00', scrubbed: false },
-        hca: { name: 'H. Green', shift: '08:00 - 16:00' }
-      }
-    },
-    {
-      theatre: 'Main Theatre 5',
-      specialty: 'Emergency',
-      session: '24/7 On-Call',
-      sessionsCount: 4,
-      casesCompleted: 2,
-      status: 'standby',
-      patientStatus: 'Standby - Ready',
-      currentProcedure: '',
-      surgeryStartTime: '',
-      estimatedFinish: '',
-      team: {
-        surgeon: { name: 'I. Moore', shift: '08:00 - 20:00' },
-        assistant: { name: 'J. Clark', shift: '08:00 - 20:00' },
-        anaesthetist: { name: 'K. Baker ☕', shift: '08:00 - 20:00' },
-        anaesNP: { name: 'L. Hill', shift: '08:00 - 18:00' },
-        scrubNP1: { name: 'RN M. Scott', shift: '08:00 - 20:00', scrubbed: false },
-        scrubNP2: { name: 'ODP N. Young', shift: '08:00 - 20:00', scrubbed: false },
-        hca: { name: 'O. King', shift: '08:00 - 20:00' }
-      }
-    },
-    {
-      theatre: 'Main Theatre 6',
-      specialty: 'Ophthalmology',
-      session: '08:00 - 18:00',
-      sessionsCount: 3,
-      casesCompleted: 2,
-      status: 'surgery_started',
-      patientStatus: 'Surgery Started',
-      currentProcedure: 'Cataract Surgery Bilateral',
-      nextCase: 'Retinal Detachment Repair',
-      surgeryStartTime: '09:15',
-      estimatedFinish: '10:45',
-      team: {
-        surgeon: { name: 'P. Wright', shift: '08:00 - 18:00' },
-        assistant: { name: 'Q. Turner', shift: '08:00 - 18:00' },
-        anaesthetist: { name: 'R. Phillips', shift: '08:00 - 18:00' },
-        anaesNP: { name: 'S. Campbell', shift: '08:00 - 16:00' },
-        scrubNP1: { name: 'RN T. Parker', shift: '08:00 - 18:00', scrubbed: true, etf: '10:45', relievedBy: 'ODP U. Evans', relievedFrom: 'Main Theatre 6' },
-        scrubNP2: { name: 'ODP U. Evans', shift: '08:00 - 18:00', scrubbed: false }
-      }
-    },
-    {
-      theatre: 'Main Theatre 7',
-      specialty: 'ENT',
-      session: '08:00 - 18:00',
-      sessionsCount: 3,
-      casesCompleted: 1,
-      status: 'anaesthetic_room',
-      patientStatus: 'Anaesthetic Room',
-      currentProcedure: 'Tonsillectomy',
-      nextCase: 'Septoplasty',
-      surgeryStartTime: '',
-      estimatedFinish: '11:30',
-      team: {
-        surgeon: { name: 'V. Edwards', shift: '08:00 - 18:00' },
-        assistant: { name: 'W. Collins', shift: '08:00 - 18:00' },
-        anaesthetist: { name: 'X. Morris', shift: '08:00 - 18:00' },
-        anaesNP: { name: 'Y. Rogers', shift: '08:00 - 16:00' },
-        scrubNP1: { name: 'RN Z. Reed ⚠️', shift: '08:00 - 20:00', scrubbed: false },
-        scrubNP2: { name: 'ODP A. Cook', shift: '08:00 - 18:00', scrubbed: false }
-      },
-      alerts: 'Z. Reed break overdue'
-    },
-    {
-      theatre: 'Main Theatre 8',
-      specialty: 'Gynaecology',
-      session: '08:00 - 18:00',
-      sessionsCount: 3,
-      casesCompleted: 1,
-      status: 'surgery_started',
-      patientStatus: 'Surgery Started',
-      currentProcedure: 'Laparoscopic Hysterectomy',
-      nextCase: 'Ovarian Cystectomy',
-      surgeryStartTime: '08:45',
-      estimatedFinish: '11:15',
-      team: {
-        surgeon: { name: 'B. Morgan', shift: '08:00 - 18:00' },
-        assistant: { name: 'C. Bell', shift: '08:00 - 16:00' },
-        anaesthetist: { name: 'D. Murphy', shift: '08:00 - 18:00' },
-        anaesNP: { name: 'E. Bailey', shift: '08:00 - 18:00' },
-        scrubNP1: { name: 'RN F. Rivera', shift: '08:00 - 18:00', scrubbed: true, etf: '11:15' },
-        scrubNP2: { name: 'ODP G. Cooper', shift: '08:00 - 18:00', scrubbed: false },
-        hca: { name: 'H. Ward', shift: '08:00 - 16:00' }
-      }
-    },
-    {
-      theatre: 'Main Theatre 9',
-      specialty: 'Urology',
-      session: 'CLOSED',
-      sessionsCount: 0,
-      status: 'closed',
-      team: {
-        surgeon: { name: 'I. Torres', shift: '08:00 - 16:00' },
-        assistant: { name: 'VACANT', shift: '' },
-        anaesthetist: { name: 'K. Gray', shift: '08:00 - 16:00' },
-        anaesNP: { name: 'VACANT', shift: '' },
-        scrubNP1: { name: 'VACANT', shift: '' },
-        scrubNP2: { name: 'VACANT', shift: '' }
-      },
-      alerts: 'THEATRE CLOSED - Critical equipment failure & staff shortage',
-      closureReason: 'Laser system malfunction, insufficient scrub staff coverage'
-    },
-    {
-      theatre: 'Main Theatre 10',
-      specialty: 'Plastic Surgery',
-      session: '08:00 - 20:00',
-      sessionsCount: 3,
-      casesCompleted: 1,
-      status: 'patient_sent',
-      patientStatus: 'Sent For',
-      currentProcedure: 'Free Flap Reconstruction',
-      surgeryStartTime: '',
-      estimatedFinish: '16:00',
-      team: {
-        surgeon: { name: 'O. Brooks', shift: '08:00 - 18:00' },
-        assistant: { name: 'P. Kelly', shift: '08:00 - 18:00' },
-        anaesthetist: { name: 'Q. Sanders', shift: '08:00 - 20:00' },
-        anaesNP: { name: 'R. Price', shift: '08:00 - 18:00' },
-        scrubNP1: { name: 'RN S. Bennett', shift: '08:00 - 20:00', scrubbed: false },
-        scrubNP2: { name: 'ODP T. Wood', shift: '08:00 - 20:00', scrubbed: false },
-        scrubNP3: { name: 'RN U. Barnes', shift: '10:00 - 20:00', scrubbed: false }
-      }
-    },
-    {
-      theatre: 'Main Theatre 11',
-      specialty: 'Vascular',
-      session: '08:00 - 18:00',
-      sessionsCount: 2,
-      casesCompleted: 0,
-      status: 'surgery_started',
-      patientStatus: 'Surgery Started',
-      currentProcedure: 'AAA Repair',
-      surgeryStartTime: '08:30',
-      estimatedFinish: '13:00',
-      team: {
-        surgeon: { name: 'V. Ross', shift: '08:00 - 18:00' },
-        assistant: { name: 'W. Henderson', shift: '08:00 - 18:00' },
-        anaesthetist: { name: 'X. Coleman ☕', shift: '07:00 - 19:00' },
-        anaesNP: { name: 'Y. Jenkins', shift: '08:00 - 18:00' },
-        anaesNP2: { name: 'Z. Perry', shift: '10:00 - 18:00' },
-        scrubNP1: { name: 'RN A. Powell', shift: '08:00 - 18:00', scrubbed: true, etf: '13:00', relievedBy: 'ODP B. Long', relievedFrom: 'Main Theatre 11', relievedAt: '10:15' },
-        scrubNP2: { name: 'ODP B. Long', shift: '08:00 - 18:00', scrubbed: false }
-      }
-    },
-    {
-      theatre: 'Main Theatre 12',
-      specialty: 'Thoracic',
-      session: '08:00 - 18:00',
-      sessionsCount: 2,
-      casesCompleted: 0,
-      status: 'anaesthetic_room',
-      patientStatus: 'Anaesthetic Room',
-      currentProcedure: 'VATS Lobectomy',
-      surgeryStartTime: '',
-      estimatedFinish: '14:30',
-      team: {
-        surgeon: { name: 'C. Patterson', shift: '08:00 - 18:00' },
-        assistant: { name: 'D. Hughes', shift: '08:00 - 18:00' },
-        anaesthetist: { name: 'E. Flores', shift: '08:00 - 20:00' },
-        anaesNP: { name: 'F. Washington', shift: '08:00 - 18:00' },
-        scrubNP1: { name: 'RN G. Butler', shift: '08:00 - 20:00', scrubbed: false },
-        scrubNP2: { name: 'ODP H. Simmons', shift: '08:00 - 18:00', scrubbed: false }
-      }
-    },
-    {
-      theatre: 'DSU Theatre 1',
-      specialty: 'Paediatric Day Surgery',
-      session: '08:00 - 17:00',
-      sessionsCount: 2,
-      casesCompleted: 0,
-      status: 'surgery_started',
-      patientStatus: 'Surgery Started',
-      currentProcedure: 'Paediatric Hernia Repair',
-      surgeryStartTime: '09:00',
-      estimatedFinish: '09:45',
-      team: {
-        surgeon: { name: 'I. Foster', shift: '08:00 - 17:00' },
-        assistant: { name: 'J. Gonzales', shift: '08:00 - 17:00' },
-        anaesthetist: { name: 'K. Bryant', shift: '08:00 - 17:00' },
-        anaesNP: { name: 'L. Alexander', shift: '08:00 - 17:00' },
-        scrubNP1: { name: 'RN M. Russell', shift: '08:00 - 17:00', scrubbed: true, etf: '09:45' },
-        scrubNP2: { name: 'ODP N. Griffin', shift: '08:00 - 17:00', scrubbed: false },
-        hca: { name: 'O. Diaz', shift: '08:00 - 17:00' }
-      }
-    },
-    {
-      theatre: 'DSU Theatre 2',
-      specialty: 'Dental Day Surgery',
-      session: '08:00 - 17:00',
-      sessionsCount: 2,
-      casesCompleted: 0,
-      status: 'standby',
-      patientStatus: 'Standby - Ready',
-      currentProcedure: '',
-      surgeryStartTime: '',
-      estimatedFinish: '',
-      team: {
-        surgeon: { name: 'P. Hayes', shift: '08:00 - 17:00' },
-        assistant: { name: 'Q. Myers', shift: '08:00 - 17:00' },
-        anaesthetist: { name: 'R. Ford', shift: '08:00 - 17:00' },
-        anaesNP: { name: 'S. Hamilton', shift: '08:00 - 17:00' },
-        scrubNP1: { name: 'ODP T. Graham', shift: '08:00 - 17:00', scrubbed: false }
-      }
-    },
-    {
-      theatre: 'DSU Theatre 3',
-      specialty: 'Maxillofacial Day',
-      session: '08:00 - 17:00',
-      sessionsCount: 2,
-      casesCompleted: 0,
-      status: 'patient_sent',
-      patientStatus: 'Sent For',
-      currentProcedure: 'Wisdom Tooth Extraction',
-      surgeryStartTime: '',
-      estimatedFinish: '10:30',
-      team: {
-        surgeon: { name: 'U. Sullivan', shift: '08:00 - 17:00' },
-        assistant: { name: 'V. Pierce', shift: '08:00 - 17:00' },
-        anaesthetist: { name: 'W. Jordan', shift: '08:00 - 17:00' },
-        anaesNP: { name: 'X. Owens', shift: '08:00 - 17:00' },
-        scrubNP1: { name: 'RN Y. Reynolds ⚠️', shift: '08:00 - 17:00', scrubbed: false },
-        scrubNP2: { name: 'ODP Z. Fisher', shift: '08:00 - 17:00', scrubbed: false }
-      },
-      alerts: 'Y. Reynolds delayed'
-    },
-    {
-      theatre: 'DSU Theatre 4',
-      specialty: 'General Day Surgery',
-      session: '08:00 - 17:00',
-      sessionsCount: 3,
-      casesCompleted: 1,
-      status: 'surgery_started',
-      patientStatus: 'Surgery Started',
-      currentProcedure: 'Laparoscopic Cholecystectomy',
-      surgeryStartTime: '08:40',
-      estimatedFinish: '10:10',
-      team: {
-        surgeon: { name: 'A. Ellis', shift: '08:00 - 17:00' },
-        assistant: { name: 'B. Stevens', shift: '08:00 - 17:00' },
-        anaesthetist: { name: 'C. Chapman', shift: '08:00 - 17:00' },
-        anaesNP: { name: 'D. Payne', shift: '08:00 - 17:00' },
-        scrubNP1: { name: 'RN E. Hunter', shift: '08:00 - 17:00', scrubbed: true, etf: '10:10' },
-        scrubNP2: { name: 'ODP F. Lawson', shift: '08:00 - 17:00', scrubbed: false },
-        scrubNP3: { name: 'RN G. Berry', shift: '08:00 - 17:00', scrubbed: false }
-      }
-    },
-    {
-      theatre: 'DSU Theatre 5',
-      specialty: 'HPB Day Surgery',
-      session: '08:00 - 17:00',
-      sessionsCount: 2,
-      casesCompleted: 0,
-      status: 'anaesthetic_room',
-      patientStatus: 'Anaesthetic Room',
-      currentProcedure: 'Liver Biopsy',
-      surgeryStartTime: '',
-      estimatedFinish: '11:00',
-      team: {
-        surgeon: { name: 'H. Arnold', shift: '08:00 - 17:00' },
-        assistant: { name: 'I. Willis', shift: '08:00 - 17:00' },
-        anaesthetist: { name: 'J. Ray', shift: '08:00 - 17:00' },
-        anaesNP: { name: 'K. Burns', shift: '08:00 - 17:00' },
-        anaesNP2: { name: 'L. Stanley', shift: '08:00 - 17:00' },
-        scrubNP1: { name: 'RN M. Webb', shift: '08:00 - 17:00', scrubbed: false },
-        scrubNP2: { name: 'ODP N. Tucker', shift: '08:00 - 17:00', scrubbed: false }
-      }
-    },
-    {
-      theatre: 'DSU Theatre 6',
-      specialty: 'Complex Day Surgery',
-      session: '08:00 - 17:00',
-      sessionsCount: 2,
-      casesCompleted: 0,
-      status: 'standby',
-      patientStatus: 'Standby - Ready',
-      currentProcedure: '',
-      surgeryStartTime: '',
-      estimatedFinish: '',
-      team: {
-        surgeon: { name: 'O. Porter', shift: '08:00 - 17:00' },
-        assistant: { name: 'P. Hunter', shift: '08:00 - 17:00' },
-        anaesthetist: { name: 'Q. Holmes', shift: '08:00 - 17:00' },
-        anaesNP: { name: 'R. Rice', shift: '08:00 - 17:00' },
-        scrubNP1: { name: 'RN S. Black', shift: '08:00 - 17:00', scrubbed: false },
-        scrubNP2: { name: 'ODP T. Mills', shift: '08:00 - 17:00', scrubbed: false },
-        scrubNP3: { name: 'RN U. Grant', shift: '08:00 - 17:00', scrubbed: false },
-        hca: { name: 'V. West', shift: '08:00 - 17:00' }
-      }
-    },
-    {
-      theatre: 'DSU Theatre 7',
-      specialty: 'Robotic Day Surgery',
-      session: '08:00 - 17:00',
-      sessionsCount: 2,
-      casesCompleted: 0,
-      status: 'surgery_started',
-      patientStatus: 'Surgery Started',
-      currentProcedure: 'Robotic Prostatectomy',
-      surgeryStartTime: '08:35',
-      estimatedFinish: '11:30',
-      team: {
-        surgeon: { name: 'W. Stone', shift: '08:00 - 17:00' },
-        assistant: { name: 'X. Hicks', shift: '08:00 - 17:00' },
-        anaesthetist: { name: 'Y. Crawford', shift: '08:00 - 17:00' },
-        anaesNP: { name: 'Z. Reyes', shift: '08:00 - 17:00' },
-        scrubNP1: { name: 'RN A. Little', shift: '08:00 - 17:00', scrubbed: true, etf: '11:30' },
-        scrubNP2: { name: 'ODP B. Fowler', shift: '08:00 - 17:00', scrubbed: false },
-        techSpec: { name: 'C. Sharp', shift: '08:00 - 17:00' }
-      }
-    },
-    {
-      theatre: 'DSU Theatre 8',
-      specialty: 'Hybrid Procedures',
-      session: '08:00 - 17:00',
-      sessionsCount: 2,
-      casesCompleted: 0,
-      status: 'surgery_started',
-      patientStatus: 'Surgery Started',
-      currentProcedure: 'EVAR',
-      surgeryStartTime: '09:10',
-      estimatedFinish: '12:00',
-      team: {
-        surgeon: { name: 'D. Wells', shift: '08:00 - 17:00' },
-        assistant: { name: 'E. Shaw', shift: '08:00 - 17:00' },
-        anaesthetist: { name: 'F. Ramos', shift: '08:00 - 17:00' },
-        anaesNP: { name: 'G. Holland', shift: '08:00 - 17:00' },
-        scrubNP1: { name: 'RN H. Newman ☕', shift: '08:00 - 17:00', scrubbed: true, etf: '12:00' },
-        scrubNP2: { name: 'ODP I. Barrett', shift: '08:00 - 17:00', scrubbed: false }
-      },
-      alerts: 'H. Newman on break'
-    },
-    {
-      theatre: 'DSU Theatre 9',
-      specialty: 'Spinal Day Surgery',
-      session: '08:00 - 17:00',
-      sessionsCount: 2,
-      casesCompleted: 0,
-      status: 'anaesthetic_room',
-      patientStatus: 'Anaesthetic Room',
-      currentProcedure: 'Lumbar Microdiscectomy',
-      surgeryStartTime: '',
-      estimatedFinish: '11:45',
-      team: {
-        surgeon: { name: 'J. Murray', shift: '08:00 - 17:00' },
-        assistant: { name: 'K. Freeman', shift: '08:00 - 17:00' },
-        anaesthetist: { name: 'L. Wells', shift: '08:00 - 17:00' },
-        anaesNP: { name: 'M. Castillo', shift: '08:00 - 17:00' },
-        scrubNP1: { name: 'RN N. Webb', shift: '08:00 - 17:00', scrubbed: false },
-        scrubNP2: { name: 'ODP O. Duncan', shift: '08:00 - 17:00', scrubbed: false },
-        scrubNP3: { name: 'RN P. Graves', shift: '08:00 - 17:00', scrubbed: false }
-      }
-    },
-    {
-      theatre: 'DSU Theatre 10',
-      specialty: 'Hand Surgery',
-      session: '08:00 - 17:00',
-      sessionsCount: 3,
-      casesCompleted: 1,
-      status: 'surgery_started',
-      patientStatus: 'Surgery Started',
-      currentProcedure: 'Carpal Tunnel Release',
-      surgeryStartTime: '09:20',
-      estimatedFinish: '09:50',
-      team: {
-        surgeon: { name: 'Q. Lynch', shift: '08:00 - 17:00' },
-        assistant: { name: 'R. Lawson', shift: '08:00 - 17:00' },
-        anaesthetist: { name: 'S. Simpson', shift: '08:00 - 17:00' },
-        anaesNP: { name: 'T. Kim', shift: '08:00 - 17:00' },
-        scrubNP1: { name: 'RN U. Mendoza', shift: '08:00 - 17:00', scrubbed: true, etf: '09:50' },
-        scrubNP2: { name: 'ODP V. Burke', shift: '08:00 - 17:00', scrubbed: false }
-      }
-    },
-    {
-      theatre: 'DSU Theatre 11',
-      specialty: 'Breast Surgery',
-      session: '08:00 - 17:00',
-      sessionsCount: 2,
-      casesCompleted: 0,
-      status: 'surgery_started',
-      patientStatus: 'Surgery Started',
-      currentProcedure: 'Wide Local Excision',
-      surgeryStartTime: '08:55',
-      estimatedFinish: '10:25',
-      team: {
-        surgeon: { name: 'W. Hart', shift: '08:00 - 17:00' },
-        assistant: { name: 'X. Cunningham', shift: '08:00 - 17:00' },
-        anaesthetist: { name: 'Y. Bradley', shift: '08:00 - 17:00' },
-        anaesNP: { name: 'Z. Andrews', shift: '08:00 - 17:00' },
-        scrubNP1: { name: 'RN A. Stephens', shift: '08:00 - 17:00', scrubbed: true, etf: '10:25' },
-        scrubNP2: { name: 'ODP B. Moreno', shift: '08:00 - 17:00', scrubbed: false }
-      }
-    },
-    {
-      theatre: 'DSU Theatre 12',
-      specialty: 'Bariatric Day Surgery',
-      session: '08:00 - 17:00',
-      sessionsCount: 2,
-      casesCompleted: 0,
-      status: 'patient_sent',
-      patientStatus: 'Sent For - Delayed',
-      currentProcedure: 'Gastric Band Adjustment',
-      surgeryStartTime: '',
-      estimatedFinish: '11:00',
-      team: {
-        surgeon: { name: 'C. Knight', shift: '08:00 - 17:00' },
-        assistant: { name: 'D. Lawrence', shift: '08:00 - 17:00' },
-        anaesthetist: { name: 'E. Vargas', shift: '08:00 - 17:00' },
-        anaesNP: { name: 'F. Austin', shift: '08:00 - 17:00' },
-        anaesNP2: { name: 'G. Peters', shift: '08:00 - 17:00' },
-        scrubNP1: { name: 'RN H. Hawkins', shift: '08:00 - 17:00', scrubbed: false },
-        scrubNP2: { name: 'ODP I. Fields', shift: '08:00 - 17:00', scrubbed: false }
-      },
-      alerts: 'Awaiting special equipment'
-    },
-    {
-      theatre: 'DSU Theatre 13',
-      specialty: 'Minor Procedures',
-      session: '08:00 - 17:00',
-      sessionsCount: 3,
-      casesCompleted: 1,
-      status: 'surgery_started',
-      patientStatus: 'Surgery Started',
-      currentProcedure: 'Skin Lesion Excision',
-      surgeryStartTime: '09:05',
-      estimatedFinish: '09:30',
-      team: {
-        surgeon: { name: 'J. Weaver', shift: '08:00 - 17:00' },
-        assistant: { name: 'K. Mason', shift: '08:00 - 17:00' },
-        anaesthetist: { name: 'L. Dixon ⚠️', shift: '08:00 - 17:00' },
-        anaesNP: { name: 'M. Hunt', shift: '08:00 - 17:00' },
-        scrubNP1: { name: 'RN N. Gibson', shift: '08:00 - 17:00', scrubbed: true, etf: '09:30' },
-        scrubNP2: { name: 'ODP O. Marshall', shift: '08:00 - 17:00', scrubbed: false }
-      },
-      alerts: 'L. Dixon break overdue'
-    },
-    {
-      theatre: 'DSU Theatre 14',
-      specialty: 'Endoscopy',
-      session: '08:00 - 17:00',
-      sessionsCount: 4,
-      casesCompleted: 2,
-      status: 'surgery_started',
-      patientStatus: 'Surgery Started',
-      currentProcedure: 'Colonoscopy',
-      surgeryStartTime: '09:25',
-      estimatedFinish: '09:55',
-      team: {
-        surgeon: { name: 'P. Wagner', shift: '08:00 - 17:00' },
-        assistant: { name: 'Q. Pearson', shift: '08:00 - 17:00' },
-        anaesthetist: { name: 'R. Kelley', shift: '08:00 - 17:00' },
-        anaesNP: { name: 'S. Dunn', shift: '08:00 - 17:00' },
-        scrubNP1: { name: 'RN T. Oliver', shift: '08:00 - 17:00', scrubbed: true, etf: '09:55' },
-        scrubNP2: { name: 'ODP U. Silva', shift: '08:00 - 17:00', scrubbed: false }
-      }
-    }
-  ];
-
-  // Recovery Area Data
-  const recoveryBays = {
-    mainTheatres: [
-      {
-        bayNumber: 1,
-        occupied: true,
-        patientArrivalTime: '09:45',
-        fromTheatre: 'Main Theatre 1',
-        specialty: 'Elective Orthopaedics',
-        procedure: 'Total Hip Replacement',
-        dischargeWard: 'Ward 7A - Orthopaedics',
-        wardExtension: '2471',
-        extensionNumber: '2450'
-      },
-      {
-        bayNumber: 2,
-        occupied: true,
-        patientArrivalTime: '10:20',
-        fromTheatre: 'Main Theatre 8',
-        specialty: 'Gynaecology',
-        procedure: 'Laparoscopic Hysterectomy',
-        dischargeWard: 'Ward 4B - Gynae',
-        wardExtension: '2384',
-        extensionNumber: '2451'
-      },
-      {
-        bayNumber: 3,
-        occupied: false,
-        extensionNumber: '2452'
-      },
-      {
-        bayNumber: 4,
-        occupied: true,
-        patientArrivalTime: '08:30',
-        fromTheatre: 'Main Theatre 6',
-        specialty: 'Ophthalmology',
-        procedure: 'Cataract Surgery',
-        dischargeWard: 'Discharge Lounge',
-        wardExtension: '2299',
-        extensionNumber: '2453'
-      },
-      {
-        bayNumber: 5,
-        occupied: false,
-        extensionNumber: '2454'
-      },
-      {
-        bayNumber: 6,
-        occupied: true,
-        patientArrivalTime: '09:15',
-        fromTheatre: 'Main Theatre 11',
-        specialty: 'Vascular',
-        procedure: 'AAA Repair - Obs',
-        dischargeWard: 'ICU',
-        wardExtension: '2500',
-        extensionNumber: '2455'
-      }
-    ],
-    acad: [
-      {
-        bayNumber: 1,
-        occupied: true,
-        patientArrivalTime: '09:30',
-        fromTheatre: 'DSU Theatre 1',
-        specialty: 'Paediatric Day Surgery',
-        procedure: 'Hernia Repair',
-        dischargeWard: 'Paediatric Ward',
-        wardExtension: '2320',
-        extensionNumber: '2460'
-      },
-      {
-        bayNumber: 2,
-        occupied: false,
-        extensionNumber: '2461'
-      },
-      {
-        bayNumber: 3,
-        occupied: true,
-        patientArrivalTime: '09:00',
-        fromTheatre: 'DSU Theatre 4',
-        specialty: 'General Day Surgery',
-        procedure: 'Laparoscopic Cholecystectomy',
-        dischargeWard: 'Discharge Lounge',
-        wardExtension: '2299',
-        extensionNumber: '2462'
-      },
-      {
-        bayNumber: 4,
-        occupied: false,
-        extensionNumber: '2463'
-      }
-    ]
-  };
-
-  // Theatre extension numbers mapping
-  const theatreExtensions: { [key: string]: string } = {
-    'Main Theatre 1': '2401',
-    'Main Theatre 2': '2402',
-    'Main Theatre 3': '2403',
-    'Main Theatre 4': '2404',
-    'Main Theatre 5': '2405',
-    'Main Theatre 6': '2406',
-    'Main Theatre 7': '2407',
-    'Main Theatre 8': '2408',
-    'Main Theatre 9': '2409',
-    'Main Theatre 10': '2410',
-    'Main Theatre 11': '2411',
-    'Main Theatre 12': '2412',
-    'DSU Theatre 1': '2421',
-    'DSU Theatre 2': '2422',
-    'DSU Theatre 3': '2423',
-    'DSU Theatre 4': '2424',
-    'DSU Theatre 5': '2425',
-    'DSU Theatre 6': '2426',
-    'DSU Theatre 7': '2427',
-    'DSU Theatre 8': '2428',
-    'DSU Theatre 9': '2429',
-    'DSU Theatre 10': '2430',
-    'DSU Theatre 11': '2431',
-    'DSU Theatre 12': '2432',
-    'DSU Theatre 13': '2433',
-    'DSU Theatre 14': '2434',
-  };
-
-  // Filter theatres based on selected unit
-  const filteredTheatres = theatreAllocations.filter(theatre => {
+  const filteredTheatres = theatreAllocations.filter(t => {
     if (selectedUnit === 'all') return true;
-    if (selectedUnit === 'main') return theatre.theatre.startsWith('Main Theatre');
-    if (selectedUnit === 'acad') return theatre.theatre.startsWith('DSU Theatre');
+    if (selectedUnit === 'main') return t.unit === 'main';
+    if (selectedUnit === 'acad') return t.unit === 'acad';
     return false;
   });
 
-  // Calculate KPI metrics based on selected unit
-  const getTheatreStats = () => {
-    if (selectedUnit === 'recovery') {
-      return { running: 0, total: 0 };
-    }
-    const running = filteredTheatres.filter(t => t.status !== 'closed').length;
-    const total = filteredTheatres.length;
-    return { running, total };
+  const theatreStats = {
+    running: selectedUnit === 'recovery' ? 0 : filteredTheatres.filter(t => t.status !== 'closed').length,
+    total: selectedUnit === 'recovery' ? 0 : filteredTheatres.length
   };
+  const staffCount = selectedUnit === 'recovery'
+    ? 0
+    : filteredTheatres.reduce((n, th) => n + Object.values(th.team).filter((s: any) => s && s.name && s.name !== 'VACANT').length, 0);
 
-  const getStaffCount = () => {
-    if (selectedUnit === 'recovery') {
-      // Count recovery staff (for now return 0, will be updated when recovery staff data is added)
-      return 0;
-    }
-
-    let staffCount = 0;
-    filteredTheatres.forEach(theatre => {
-      Object.values(theatre.team).forEach(staff => {
-        if (staff && staff.name && staff.name !== 'VACANT') {
-          staffCount++;
-        }
-      });
-    });
-    return staffCount;
+  const calculateDuration = (startTime: string, endTime: string) => {
+    if (!startTime || !endTime) return '';
+    const [sh, sm] = startTime.split(':').map(Number);
+    const [eh, em] = endTime.split(':').map(Number);
+    const diff = (eh * 60 + em) - (sh * 60 + sm);
+    const h = Math.floor(diff / 60);
+    const m = diff % 60;
+    if (h > 0 && m > 0) return `${h}h ${m}min`;
+    if (h > 0) return `${h}h`;
+    return `${m}min`;
   };
-
-  const getStaffOnBreak = () => {
-    if (selectedUnit === 'recovery') return 0;
-
-    let onBreakCount = 0;
-    filteredTheatres.forEach(theatre => {
-      Object.values(theatre.team).forEach(staff => {
-        if (staff && staff.name && staff.name.includes('☕')) {
-          onBreakCount++;
-        }
-      });
-    });
-    return onBreakCount;
-  };
-
-  const getStaffDelayed = () => {
-    if (selectedUnit === 'recovery') return 0;
-
-    let delayedCount = 0;
-    filteredTheatres.forEach(theatre => {
-      Object.values(theatre.team).forEach(staff => {
-        if (staff && staff.name && staff.name.includes('⚠️')) {
-          delayedCount++;
-        }
-      });
-    });
-    return delayedCount;
-  };
-
-  const theatreStats = getTheatreStats();
-  const staffCount = getStaffCount();
-  const staffOnBreak = getStaffOnBreak();
-  const staffDelayed = getStaffDelayed();
 
   return (
-    <div className="h-full flex flex-col bg-gray-50">
-      {/* Top Info Bar - Date/Time and Live Status */}
-      <div className="bg-white border-b border-gray-200 px-3 py-2 flex items-center justify-between flex-shrink-0">
-        <div className="flex items-center gap-3 text-xs text-gray-600">
-          <div className="flex items-center gap-1">
-            <Calendar className="w-3 h-3 text-blue-600" />
-            <span className="hidden sm:inline">{formatDateTime().date}</span>
-            <span className="sm:hidden">{new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Clock className="w-3 h-3 text-blue-600" />
-            <span className="font-mono">{formatDateTime().time}</span>
-          </div>
-        </div>
-        <div className="flex items-center space-x-1 bg-green-500/20 px-2 py-1 rounded-full">
-          <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-          <span className="text-xs text-green-700 font-semibold">Live</span>
-        </div>
-      </div>
-
-      {/* Unit Filter Buttons */}
-      <div className="bg-white border-b border-gray-200 px-3 py-2 flex-shrink-0">
-        <div className="grid grid-cols-4 gap-2">
-          <button
-            onClick={() => setSelectedUnit('all')}
-            className={`px-2 py-2 sm:px-6 sm:py-3 rounded-md text-xs sm:text-base font-semibold transition-all ${
-              selectedUnit === 'all'
-                ? 'bg-blue-600 text-white'
-                : 'bg-white text-gray-900 border border-gray-300'
-            }`}
-          >
-            All
-          </button>
-          <button
-            onClick={() => setSelectedUnit('main')}
-            className={`px-2 py-2 sm:px-6 sm:py-3 rounded-md text-xs sm:text-base font-semibold transition-all ${
-              selectedUnit === 'main'
-                ? 'bg-blue-600 text-white'
-                : 'bg-white text-gray-900 border border-gray-300'
-            }`}
-          >
-            Main
-          </button>
-          <button
-            onClick={() => setSelectedUnit('acad')}
-            className={`px-2 py-2 sm:px-6 sm:py-3 rounded-md text-xs sm:text-base font-semibold transition-all ${
-              selectedUnit === 'acad'
-                ? 'bg-blue-600 text-white'
-                : 'bg-white text-gray-900 border border-gray-300'
-            }`}
-          >
-            DSU
-          </button>
-          <button
-            onClick={() => setSelectedUnit('recovery')}
-            className={`px-2 py-2 sm:px-6 sm:py-3 rounded-md text-xs sm:text-base font-semibold transition-all ${
-              selectedUnit === 'recovery'
-                ? 'bg-blue-600 text-white'
-                : 'bg-white text-gray-900 border border-gray-300'
-            }`}
-          >
-            Rec
-          </button>
-        </div>
-      </div>
-
-      {/* Key Performance Metrics - Responsive: Larger on Desktop, Compact on Mobile */}
-      <div className="px-3 sm:px-6 pt-3 sm:pt-6">
-      <div className="grid grid-cols-4 gap-2 sm:gap-6 mb-3 sm:mb-6">
-        {/* Theatres Operational Card */}
-        <div
-          onClick={() => setShowTheatreOpsModal(true)}
-          className="bg-white rounded-lg border-2 border-gray-300 p-2 sm:p-6 cursor-pointer shadow-md hover:shadow-xl hover:border-blue-500 hover:scale-105 transition-all duration-200 hover:bg-blue-50"
-        >
-          <div className="flex items-center justify-between mb-1 sm:mb-3">
-            <Activity className="w-4 h-4 sm:w-8 sm:h-8 text-blue-600" />
-            <span className="text-[8px] sm:text-xs bg-blue-600 text-white px-1 sm:px-2.5 py-0.5 sm:py-1 rounded font-semibold">Live</span>
-          </div>
-          <h3 className="text-sm sm:text-4xl font-bold text-gray-900">
-            {selectedUnit === 'recovery' ? 'N/A' : `${theatreStats.running}/${theatreStats.total}`}
-          </h3>
-          <p className="text-gray-700 font-semibold mt-0 sm:mt-2">
-            <span className="sm:hidden text-[10px]">Theatres</span>
-            <span className="hidden sm:inline text-base">Theatres Operational</span>
-          </p>
-        </div>
-
-        {/* Staff On Duty Card */}
-        <div
-          onClick={() => setShowStaffDutyModal(true)}
-          className="bg-white rounded-lg border-2 border-gray-300 p-2 sm:p-6 cursor-pointer shadow-md hover:shadow-xl hover:border-green-500 hover:scale-105 transition-all duration-200 hover:bg-green-50"
-        >
-          <div className="flex items-center justify-between mb-1 sm:mb-3">
-            <Users className="w-4 h-4 sm:w-8 sm:h-8 text-green-600" />
-            <span className="text-[8px] sm:text-xs bg-green-600 text-white px-1 sm:px-2.5 py-0.5 sm:py-1 rounded font-semibold">
-              {selectedUnit === 'recovery' ? 'Rec' : 'OK'}
-            </span>
-          </div>
-          <h3 className="text-sm sm:text-4xl font-bold text-gray-900">{staffCount}</h3>
-          <p className="text-gray-700 font-semibold mt-0 sm:mt-2">
-            <span className="sm:hidden text-[10px]">Staff</span>
-            <span className="hidden sm:inline text-base">Staff on Duty</span>
-          </p>
-        </div>
-
-        {/* Avg Turnover Time Card */}
-        <div
-          onClick={() => setShowTurnoverModal(true)}
-          className="bg-white rounded-lg border-2 border-gray-300 p-2 sm:p-6 cursor-pointer shadow-md hover:shadow-xl hover:border-purple-500 hover:scale-105 transition-all duration-200 hover:bg-purple-50"
-        >
-          <div className="flex items-center justify-between mb-1 sm:mb-3">
-            <Clock className="w-4 h-4 sm:w-8 sm:h-8 text-purple-600" />
-            <span className="text-[8px] sm:text-xs bg-purple-600 text-white px-1 sm:px-2.5 py-0.5 sm:py-1 rounded font-semibold">OK</span>
-          </div>
-          <h3 className="text-sm sm:text-4xl font-bold text-gray-900">18m</h3>
-          <p className="text-gray-700 font-semibold mt-0 sm:mt-2">
-            <span className="sm:hidden text-[10px]">Turnover</span>
-            <span className="hidden sm:inline text-base">Avg Turnover Time</span>
-          </p>
-        </div>
-
-        {/* Efficiency Score Card */}
-        <div
-          onClick={() => setShowEfficiencyModal(true)}
-          className="bg-white rounded-lg border-2 border-gray-300 p-2 sm:p-6 cursor-pointer shadow-md hover:shadow-xl hover:border-orange-500 hover:scale-105 transition-all duration-200 hover:bg-orange-50"
-        >
-          <div className="flex items-center justify-between mb-1 sm:mb-3">
-            <TrendingUp className="w-4 h-4 sm:w-8 sm:h-8 text-orange-600" />
-            <span className="text-[8px] sm:text-xs bg-orange-600 text-white px-1 sm:px-2.5 py-0.5 sm:py-1 rounded font-semibold">High</span>
-          </div>
-          <h3 className="text-sm sm:text-4xl font-bold text-gray-900">94%</h3>
-          <p className="text-gray-700 font-semibold mt-0 sm:mt-2">
-            <span className="sm:hidden text-[10px]">Efficiency</span>
-            <span className="hidden sm:inline text-base">Efficiency Score</span>
-          </p>
-        </div>
-      </div>
-      </div>
-
-      {/* Two-Panel Layout for Desktop, Single Column for Mobile */}
-      <div className="flex-1 overflow-y-auto px-3">
-        <div className="flex flex-col md:flex-row gap-3 sm:gap-6 h-full">
-          {/* LEFT PANEL: Theatre Operations */}
-          <div className="flex-1 md:w-[65%] overflow-y-auto">
-        {/* Theatre Team Allocations */}
-        {selectedUnit !== 'recovery' && (
-            <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-6 mb-3 sm:mb-6 shadow-sm">
-          <h2 className="text-base sm:text-2xl font-bold text-gray-900 mb-2 sm:mb-3 flex items-center">
-            <Users className="w-5 h-5 sm:w-6 sm:h-6 mr-2 text-blue-600" />
-            {selectedUnit === 'all' && (
-              <>
-                <span className="lg:hidden">All Theatres</span>
-                <span className="hidden lg:inline">All Theatre Operations</span>
-              </>
-            )}
-            {selectedUnit === 'main' && (
-              <>
-                <span className="lg:hidden">Main Theatres</span>
-                <span className="hidden lg:inline">Main Theatres Operations</span>
-              </>
-            )}
-            {selectedUnit === 'acad' && (
-              <>
-                <span className="lg:hidden">DSU Theatres</span>
-                <span className="hidden lg:inline">DSU Theatres Operations</span>
-              </>
-            )}
-          </h2>
-          <div className="text-[10px] sm:text-sm text-gray-600 mb-2 sm:mb-3 hidden sm:block">
-            {filteredTheatres.filter(t => t.status === 'surgery_started').length} Surgery, {filteredTheatres.filter(t => t.status === 'anaesthetic_room').length} Anaes, {filteredTheatres.filter(t => t.status === 'standby').length} Standby, {filteredTheatres.filter(t => t.status === 'closed').length} Closed
-          </div>
-          <div className="max-h-[600px] overflow-y-auto pr-1">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
-              {filteredTheatres.map((allocation, idx) => (
-              <div
-                key={idx}
-                className={`p-3 sm:p-5 rounded-lg cursor-pointer group border-2 shadow-md hover:shadow-xl hover:scale-[1.02] transition-all duration-200 ${
-                  allocation.status === 'closed'
-                    ? 'bg-gray-50 border-gray-400 opacity-75 hover:border-gray-500'
-                    : 'bg-white border-gray-300 hover:border-teal-500 hover:bg-teal-50/30'
-                }`}
-                onClick={() => handleTheatreClick(allocation.theatre)}
-              >
-                <div className="mb-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="font-bold text-base sm:text-lg text-gray-900 flex items-center">
-                      {allocation.theatre}
-                      <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 ml-1 text-gray-400 group-hover:text-teal-600" />
-                    </p>
-                    <span className={`text-xs sm:text-sm px-2 sm:px-2.5 py-1 rounded font-bold ${
-                      allocation.status === 'surgery_started' ? 'bg-green-100 text-green-700' :
-                      allocation.status === 'anaesthetic_room' ? 'bg-purple-100 text-purple-700' :
-                      allocation.status === 'patient_sent' ? 'bg-blue-100 text-blue-700' :
-                      allocation.status === 'standby' ? 'bg-gray-100 text-gray-600' :
-                      allocation.status === 'closed' ? 'bg-red-100 text-red-700' :
-                      'bg-yellow-100 text-yellow-700'
-                    }`}>
-                      {allocation.status === 'surgery_started' ? 'SURG' :
-                       allocation.status === 'anaesthetic_room' ? 'ANAES' :
-                       allocation.status === 'patient_sent' ? 'SENT' :
-                       allocation.status === 'standby' ? 'STBY' :
-                       allocation.status === 'closed' ? 'CLSD' : 'OTHER'}
-                    </span>
-                  </div>
-                  <p className="text-sm sm:text-base text-gray-700 font-semibold mb-1">{allocation.specialty}</p>
-                  <p className="text-xs sm:text-sm text-gray-600 hidden sm:block">
-                    {allocation.session}
-                    {allocation.sessionsCount > 0 && ` • ${allocation.casesCompleted || 0}/${allocation.sessionsCount}`}
-                  </p>
+    <div className="min-h-screen w-full overflow-x-hidden bg-white">
+      {/* content container aligned with header; wide enough so names fit */}
+      <div className="mx-auto w-full max-w-[1440px] px-3 sm:px-4 lg:px-6">
+        {/* Top bar */}
+        <div className="border-b border-gray-200 py-2 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 bg-gray-100 rounded p-1">
+              <button onClick={() => changeDate(-1)} className="p-1 hover:bg-white rounded" title="Previous day">
+                <ChevronLeft className="w-4 h-4 text-gray-700" />
+              </button>
+              <div className="flex items-center gap-2 px-2" suppressHydrationWarning>
+                <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
+                <div className="flex flex-col sm:flex-row sm:items-end sm:gap-2">
+                  <span className="text-xs sm:text-2xl font-semibold text-gray-700 leading-tight">
+                    {new Date(selectedDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </span>
+                  <span className="text-[10px] sm:text-sm text-gray-500 leading-tight">{relativeDateLabel()}</span>
                 </div>
-                {/* Staff details - Shown on both mobile and desktop */}
-                <div className="space-y-1 sm:space-y-1.5">
-                  {Object.entries({
-                    'Cons': { ...allocation.team.surgeon, role: 'Consultant Surgeon', fullLabel: 'Consultant' },
-                    'Assist': { ...allocation.team.assistant, role: 'Assistant Surgeon', fullLabel: 'Assistant' },
-                    'Anaes': { ...allocation.team.anaesthetist, role: 'Anaesthetist', fullLabel: 'Anaesthetist' },
-                    'Anaes N/P': { ...allocation.team.anaesNP, role: 'Anaesthetic Nurse/Practitioner', fullLabel: 'Anaes N/P' },
-                    ...(allocation.team.anaesNP2 ? {'Anaes N/P 2': { ...allocation.team.anaesNP2, role: 'Anaesthetic Nurse/Practitioner', fullLabel: 'Anaes N/P 2' }} : {}),
-                    'Scrub 1': { ...allocation.team.scrubNP1, role: 'Scrub Nurse/Practitioner', fullLabel: 'Scrub N/P 1' },
-                    'Scrub 2': { ...allocation.team.scrubNP2, role: 'Scrub Nurse/Practitioner', fullLabel: 'Scrub N/P 2' },
-                    ...(allocation.team.scrubNP3 ? {'Scrub 3': { ...allocation.team.scrubNP3, role: 'Scrub Nurse/Practitioner', fullLabel: 'Scrub N/P 3' }} : {}),
-                    ...(allocation.team.hca ? {'HCA 1': { ...allocation.team.hca, role: 'Healthcare Assistant', fullLabel: 'HCA' }} : {}),
-                    ...(allocation.team.techSpec ? {'Tech Spec': { ...allocation.team.techSpec, role: 'Technical Specialist', fullLabel: 'Tech Spec' }} : {})
-                  }).map(([label, staff]) => {
-                    // Add null check for staff object
-                    if (!staff || !staff.name) {
-                      return null;
-                    }
-
-                    const needsReliefHighlight = staff.shift && staff.shift.startsWith('08:00') && staff.shift.endsWith('20:00');
-
-                    return (
-                      <div key={label} className="group/staff">
-                        {/* Single row layout for both mobile and desktop */}
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center flex-1 min-w-0">
-                            <span className={`text-[10px] sm:text-sm mr-1 sm:mr-2 min-w-[60px] sm:min-w-[100px] flex-shrink-0 font-semibold ${staff.name === 'VACANT' ? 'text-gray-400' : 'text-gray-700'}`}>
-                              <span className="lg:hidden">{label}:</span>
-                              <span className="hidden lg:inline">{staff.fullLabel || label}:</span>
-                            </span>
-                            {staff.name === 'VACANT' ? (
-                              <span className="text-gray-400 italic text-[10px] sm:text-sm">Vacant</span>
-                            ) : (
-                              <div className="flex items-center gap-0.5 sm:gap-1.5 min-w-0 flex-wrap">
-                                <span
-                                  className={`cursor-pointer text-blue-600 hover:text-blue-800 hover:underline font-medium text-[10px] sm:text-sm ${
-                                    needsReliefHighlight ? 'text-orange-600 hover:text-orange-800 font-bold' : ''
-                                  }`}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleStaffClick(staff.name.replace(/[☕⚠️]/g, '').trim(), staff.role, allocation.theatre);
-                                  }}
-                                  onMouseEnter={(e) => handleStaffHover(e, staff.name.replace(/[☕⚠️]/g, '').trim(), staff.role)}
-                                  onMouseLeave={() => setHoveredStaff(null)}
-                                >
-                                  {addStaffTitle(staff.name.replace(/[☕⚠️]/g, '').trim(), staff.role)}
-                                </span>
-                              {staff.scrubbed && (
-                                <span
-                                  className="italic text-[9px] sm:text-xs text-teal-700 font-medium flex-shrink-0 bg-teal-50 px-1 sm:px-1.5 py-0.5 rounded"
-                                  title={
-                                    staff.etf
-                                      ? `ETF: Approx ${staff.etf} (${calculateDuration(allocation.surgeryStartTime || '08:00', staff.etf)} duration)${
-                                          staff.relievedBy
-                                            ? `\n\nRelieved by: ${staff.relievedBy}${staff.relievedFrom && staff.relievedFrom !== allocation.theatre ? ` (from ${staff.relievedFrom})` : ''}`
-                                            : ''
-                                        }`
-                                      : 'Scrubbed in'
-                                  }
-                                >
-                                  Scrubbed in
-                                </span>
-                              )}
-                              {(staff.name.includes('☕') || staff.name.includes('⚠️')) && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleReliefRequest(staff.name.replace(/[☕⚠️]/g, '').trim(), staff.role, allocation.theatre);
-                                  }}
-                                  className="flex-shrink-0"
-                                  title="Urgent: Staff needs relief"
-                                >
-                                  <Bell className="w-3 h-3 text-orange-500 hover:text-orange-600 fill-orange-200 animate-[wiggle_1s_ease-in-out_infinite]" />
-                                </button>
-                              )}
-                            </div>
-                          )}
-                          </div>
-                          {staff.shift && staff.name !== 'VACANT' && (
-                            <span className={`text-[9px] sm:text-xs text-gray-600 ml-1 sm:ml-2 flex-shrink-0 font-medium ${
-                              needsReliefHighlight ? 'text-orange-600 font-bold bg-orange-50 px-1 sm:px-1.5 py-0.5 rounded' : 'bg-gray-100 px-1 sm:px-1.5 py-0.5 rounded'
-                            }`}>
-                              {staff.shift}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  }).filter(Boolean)}
-                </div>
-                {allocation.alerts && (
-                  <div className={`mt-2 text-xs px-2 py-1 rounded ${
-                    allocation.status === 'closed'
-                      ? 'text-red-700 bg-red-50 font-medium'
-                      : 'text-orange-600 bg-orange-50'
-                  }`}>
-                    {allocation.status === 'closed' ? '⛔' : '⚠️'} {allocation.alerts}
-                  </div>
-                )}
               </div>
+              <button onClick={() => changeDate(1)} className="p-1 hover:bg-white rounded" title="Next day">
+                <ChevronRight className="w-4 h-4 text-gray-700" />
+              </button>
+            </div>
+
+            {!isTodaySelected ? (
+              <button onClick={goToToday} className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded hover:bg-blue-200">
+                Go to Today
+              </button>
+            ) : (
+              <div className="flex items-center gap-2 text-xs sm:text-xl text-gray-600" suppressHydrationWarning>
+                <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
+                <span className="font-mono font-medium sm:font-bold">{formatTime()}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Removed the Live/Not live pill per request */}
+          <div />
+        </div>
+
+        {/* Unit filters */}
+        <div className="border-b border-gray-200 py-2">
+          <div className="grid grid-cols-4 gap-2">
+            {(['all','main','acad','recovery'] as const).map(k => (
+              <button
+                key={k}
+                onClick={() => setSelectedUnit(k)}
+                className={`px-2 py-2 sm:px-6 sm:py-3 rounded-md text-xs sm:text-base font-semibold transition-all ${
+                  selectedUnit === k ? 'bg-blue-600 text-white' : 'bg-white text-gray-900 border border-gray-300'
+                }`}
+              >
+                {k === 'all' ? 'All' : k === 'main' ? 'Main' : k === 'acad' ? 'DSU' : 'Rec'}
+              </button>
             ))}
           </div>
         </div>
-      </div>
-      )}
 
-      {/* Recovery Areas */}
-      {selectedUnit === 'recovery' && (
-        <div className="space-y-6">
-          {/* Main Theatres Recovery */}
-          <div className="bg-white border border-gray-200 rounded-lg p-5">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-              <Activity className="w-5 h-5 mr-2 text-blue-600" />
-              Main Theatres Recovery ({recoveryBays.mainTheatres.filter(b => b.occupied).length}/{recoveryBays.mainTheatres.length} Bays Occupied)
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {recoveryBays.mainTheatres.map((bay) => (
-                <div
-                  key={bay.bayNumber}
-                  className={`p-3 rounded-lg border-2 ${
-                    bay.occupied
-                      ? 'bg-blue-50 border-blue-300'
-                      : 'bg-gray-50 border-gray-200'
-                  }`}
-                  title={`Extension: ${bay.extensionNumber}`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-bold text-sm">Bay {bay.bayNumber}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded font-medium ${
-                      bay.occupied ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-600'
-                    }`}>
-                      {bay.occupied ? 'Occupied' : 'Available'}
-                    </span>
-                  </div>
-                  {bay.occupied ? (
-                    <div className="space-y-1 text-xs">
-                      <p className="text-gray-600">
-                        <span className="font-medium">Arrived:</span> {bay.patientArrivalTime}
-                      </p>
-                      <p className="text-gray-600">
-                        <span className="font-medium">From:</span> {bay.fromTheatre}
-                      </p>
-                      <p className="text-gray-600">
-                        <span className="font-medium">Specialty:</span> {bay.specialty}
-                      </p>
-                      <p className="text-gray-600">
-                        <span className="font-medium">Procedure:</span> {bay.procedure}
-                      </p>
-                      <p
-                        className="text-blue-600 font-medium cursor-help"
-                        title={`Ward Extension: ${bay.wardExtension}`}
-                      >
-                        <span className="text-gray-600 font-normal">To:</span> {bay.dischargeWard}
-                      </p>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-gray-400 italic">Bay available</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
+        {/* KPIs – now clickable */}
+        <div className="py-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {/* Theatres */}
+            <button
+              type="button"
+              onClick={() => setShowTheatreOpsModal(true)}
+              className="text-left bg-blue-50 border border-blue-200 p-3 sm:p-6 rounded-lg hover:shadow-md hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer"
+              aria-label="Open theatres operational details"
+            >
+              <div className="flex items-center justify-between mb-1 sm:mb-3">
+                <Activity className="w-5 h-5 text-blue-600" />
+                {/* removed secondary Live chip to avoid duplication */}
+              </div>
+              <h3 className="text-xl sm:text-4xl font-bold text-gray-900">
+                {selectedUnit === 'recovery' ? 'N/A' : `${theatreStats.running}/${theatreStats.total}`}
+              </h3>
+              <p className="text-gray-700 font-semibold mt-1 sm:mt-2 text-sm sm:text-base">Theatres</p>
+            </button>
 
-          {/* DSU Recovery */}
-          <div className="bg-white border border-gray-200 rounded-lg p-5">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-              <Activity className="w-5 h-5 mr-2 text-green-600" />
-              DSU Theatres Recovery ({recoveryBays.acad.filter(b => b.occupied).length}/{recoveryBays.acad.length} Bays Occupied)
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-              {recoveryBays.acad.map((bay) => (
-                <div
-                  key={bay.bayNumber}
-                  className={`p-3 rounded-lg border-2 ${
-                    bay.occupied
-                      ? 'bg-green-50 border-green-300'
-                      : 'bg-gray-50 border-gray-200'
-                  }`}
-                  title={`Extension: ${bay.extensionNumber}`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-bold text-sm">Bay {bay.bayNumber}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded font-medium ${
-                      bay.occupied ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-600'
-                    }`}>
-                      {bay.occupied ? 'Occupied' : 'Available'}
-                    </span>
-                  </div>
-                  {bay.occupied ? (
-                    <div className="space-y-1 text-xs">
-                      <p className="text-gray-600">
-                        <span className="font-medium">Arrived:</span> {bay.patientArrivalTime}
-                      </p>
-                      <p className="text-gray-600">
-                        <span className="font-medium">From:</span> {bay.fromTheatre}
-                      </p>
-                      <p className="text-gray-600">
-                        <span className="font-medium">Specialty:</span> {bay.specialty}
-                      </p>
-                      <p className="text-gray-600">
-                        <span className="font-medium">Procedure:</span> {bay.procedure}
-                      </p>
-                      <p
-                        className="text-green-600 font-medium cursor-help"
-                        title={`Ward Extension: ${bay.wardExtension}`}
-                      >
-                        <span className="text-gray-600 font-normal">To:</span> {bay.dischargeWard}
-                      </p>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-gray-400 italic">Bay available</p>
-                  )}
-                </div>
-              ))}
-            </div>
+            {/* Staff */}
+            <button
+              type="button"
+              onClick={() => setShowStaffDutyModal(true)}
+              className="text-left bg-green-50 border border-green-200 p-3 sm:p-6 rounded-lg hover:shadow-md hover:border-green-300 focus:outline-none focus:ring-2 focus:ring-green-400 cursor-pointer"
+              aria-label="Open staff-on-duty details"
+            >
+              <div className="flex items-center justify-between mb-1 sm:mb-3">
+                <Users className="w-5 h-5 text-green-600" />
+              </div>
+              <h3 className="text-xl sm:text-4xl font-bold text-gray-900">{staffCount}</h3>
+              <p className="text-gray-700 font-semibold mt-1 sm:mt-2 text-sm sm:text-base">Staff</p>
+            </button>
+
+            {/* Turnover */}
+            <button
+              type="button"
+              onClick={() => setShowTurnoverModal(true)}
+              className="text-left bg-purple-50 border border-purple-200 p-3 sm:p-6 rounded-lg hover:shadow-md hover:border-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-400 cursor-pointer"
+              aria-label="Open turnover time details"
+            >
+              <div className="flex items-center justify-between mb-1 sm:mb-3">
+                <Clock className="w-5 h-5 text-purple-600" />
+              </div>
+              <h3 className="text-xl sm:text-4xl font-bold text-gray-900">18m</h3>
+              <p className="text-gray-700 font-semibold mt-1 sm:mt-2 text-sm sm:text-base">Turnover</p>
+            </button>
+
+            {/* Efficiency */}
+            <button
+              type="button"
+              onClick={() => setShowEfficiencyModal(true)}
+              className="text-left bg-orange-50 border border-orange-200 p-3 sm:p-6 rounded-lg hover:shadow-md hover:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-400 cursor-pointer"
+              aria-label="Open efficiency score details"
+            >
+              <div className="flex items-center justify-between mb-1 sm:mb-3">
+                <TrendingUp className="w-5 h-5 text-orange-600" />
+              </div>
+              <h3 className="text-xl sm:text-4xl font-bold text-gray-900">94%</h3>
+              <p className="text-gray-700 font-semibold mt-1 sm:mt-2 text-sm sm:text-base">Efficiency</p>
+            </button>
           </div>
         </div>
-      )}
+
+        {/* Main content – one panel on mobile; two on desktop */}
+        <div className="flex flex-col md:flex-row gap-6">
+          {/* LEFT */}
+          <div className="w-full md:flex-1">
+            {selectedUnit !== 'recovery' && (
+              <section className="border-t md:border-t-0 md:border-r border-gray-200">
+                <div className="py-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Users className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
+                    <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
+                      {selectedUnit === 'all' ? 'All Theatres' : selectedUnit === 'main' ? 'Main Theatres' : 'DSU Theatres'}
+                    </h2>
+                  </div>
+                  {/* Removed Live / Not live pill per request */}
+                </div>
+
+                <div className="max-h[640px] md:max-h-[640px] overflow-y-auto">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                    {filteredTheatres.map((allocation, idx) => (
+                      <div
+                        key={idx}
+                        className={`p-4 sm:p-5 border border-gray-200 ${idx % 3 !== 2 ? 'lg:border-r' : ''} ${idx >= 1 ? 'border-t' : ''} cursor-pointer hover:bg-teal-50/30`}
+                        onClick={() => handleTheatreClick(allocation.theatre)}
+                      >
+                        <div className="mb-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="font-bold text-base sm:text-lg text-gray-900 flex items-center">
+                              {allocation.theatre}
+                              <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 ml-1 text-gray-400" />
+                            </p>
+                            <span
+                              className={`text-xs sm:text-sm px-2 py-1 rounded font-bold ${
+                                allocation.status === 'surgery_started'
+                                  ? 'bg-green-100 text-green-700'
+                                  : allocation.status === 'anaesthetic_room'
+                                  ? 'bg-purple-100 text-purple-700'
+                                  : allocation.status === 'patient_sent'
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : allocation.status === 'standby'
+                                  ? 'bg-gray-100 text-gray-600'
+                                  : allocation.status === 'closed'
+                                  ? 'bg-red-100 text-red-700'
+                                  : 'bg-yellow-100 text-yellow-700'
+                              }`}
+                            >
+                              {allocation.status === 'surgery_started' ? 'SURG'
+                                : allocation.status === 'anaesthetic_room' ? 'ANAES'
+                                : allocation.status === 'patient_sent' ? 'SENT'
+                                : allocation.status === 'standby' ? 'STBY'
+                                : allocation.status === 'closed' ? 'CLSD' : 'OTHER'}
+                            </span>
+                          </div>
+                          <p className="text-sm sm:text-base text-gray-700 font-semibold mb-1">{allocation.specialty}</p>
+                          <p className="text-xs sm:text-sm text-gray-600">
+                            {allocation.session}
+                            {allocation.sessionsCount > 0 && ` • ${allocation.casesCompleted || 0}/${allocation.sessionsCount}`}
+                          </p>
+                        </div>
+
+                        <div className="space-y-1 sm:space-y-1.5">
+                          {Object.entries({
+                            'Cons': { ...allocation.team.surgeon, role: 'Consultant Surgeon', fullLabel: 'Consultant' },
+                            'Assist': { ...allocation.team.assistant, role: 'Assistant Surgeon', fullLabel: 'Assistant' },
+                            'Anaes': { ...allocation.team.anaesthetist, role: 'Anaesthetist', fullLabel: 'Anaesthetist' },
+                            'Anaes N/P': { ...allocation.team.anaesNP, role: 'Anaesthetic Nurse/Practitioner', fullLabel: 'Anaes N/P' },
+                            'Scrub 1': { ...allocation.team.scrubNP1, role: 'Scrub Nurse/Practitioner', fullLabel: 'Scrub N/P 1' },
+                            'Scrub 2': { ...allocation.team.scrubNP2, role: 'Scrub Nurse/Practitioner', fullLabel: 'Scrub N/P 2' },
+                            ...(allocation.team.hca ? { 'HCA 1': { ...allocation.team.hca, role: 'Healthcare Assistant', fullLabel: 'HCA' } } : {})
+                          } as Record<string, any>).map(([label, staff]) => {
+                            if (!staff || !staff.name) return null;
+                            const needsReliefHighlight = staff.shift && staff.shift.startsWith('08:00') && staff.shift.endsWith('20:00');
+                            return (
+                              <div key={label} className="flex items-center justify-between">
+                                <div className="flex items-center flex-1 min-w-0">
+                                  <span className={`text-[10px] sm:text-sm mr-2 min-w-[66px] sm:min-w-[100px] font-semibold ${staff.name === 'VACANT' ? 'text-gray-400' : 'text-gray-700'}`}>
+                                    <span className="lg:hidden">{label}:</span>
+                                    <span className="hidden lg:inline">{staff.fullLabel || label}:</span>
+                                  </span>
+                                  {staff.name === 'VACANT' ? (
+                                    <span className="text-gray-400 italic text-[10px] sm:text-sm">Vacant</span>
+                                  ) : (
+                                    <div className="flex items-center gap-1 min-w-0 flex-wrap">
+                                      <span
+                                        className={`cursor-pointer text-blue-600 hover:underline font-medium text-[10px] sm:text-sm ${needsReliefHighlight ? 'text-orange-600 font-bold' : ''}`}
+                                        onClick={(e) => { e.stopPropagation(); handleStaffClick(staff.name.replace(/[☕⚠️]/g, '').trim(), staff.role, allocation.theatre); }}
+                                        onMouseEnter={(e) => handleStaffHover(e, staff.name.replace(/[☕⚠️]/g, '').trim(), staff.role)}
+                                        onMouseLeave={() => setHoveredStaff(null)}
+                                      >
+                                        {addStaffTitle(staff.name.replace(/[☕⚠️]/g, '').trim(), staff.role)}
+                                      </span>
+                                      {staff.scrubbed && (
+                                        <span
+                                          className="italic text-[9px] sm:text-xs text-teal-700 bg-teal-50 px-1 py-0.5 rounded"
+                                          title={allocation.surgeryStartTime && staff.etf ? `ETF: ${staff.etf} (${calculateDuration(allocation.surgeryStartTime, staff.etf)})` : 'Scrubbed in'}
+                                        >
+                                          Scrubbed in
+                                        </span>
+                                      )}
+                                      {(staff.name.includes('☕') || staff.name.includes('⚠️')) && (
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); handleReliefRequest(staff.name.replace(/[☕⚠️]/g, '').trim(), staff.role, allocation.theatre); }}
+                                          className="flex-shrink-0"
+                                          title="Urgent: Staff needs relief"
+                                        >
+                                          <Bell className="w-3 h-3 text-orange-500 fill-orange-200" />
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                                {staff.shift && staff.name !== 'VACANT' && (
+                                  <span className={`text-[9px] sm:text-xs text-gray-700 ml-2 ${needsReliefHighlight ? 'bg-orange-50 text-orange-700 font-bold' : 'bg-gray-100'} px-1.5 py-0.5 rounded`}>
+                                    {staff.shift}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          }).filter(Boolean)}
+                        </div>
+
+                        {allocation.alerts && (
+                          <div className={`mt-2 text-xs px-2 py-1 rounded ${allocation.status === 'closed' ? 'text-red-700 bg-red-50 font-medium' : 'text-orange-600 bg-orange-50'}`}>
+                            {allocation.status === 'closed' ? '⛔' : '⚠️'} {allocation.alerts}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {selectedUnit === 'recovery' && (
+              <section className="border-t border-gray-200 p-4">
+                <p className="text-sm text-gray-600">Recovery view…</p>
+              </section>
+            )}
+          </div>
+
+          {/* RIGHT column – kept for desktop; hidden on mobile */}
+          <aside className="hidden md:block md:w-[35%]">
+            {/* Right-hand panels could go here */}
+          </aside>
         </div>
-        {/* End LEFT PANEL */}
-
-        {/* RIGHT PANEL: Critical Alerts, Upcoming Cases, etc. - Desktop Only */}
-        <div className="hidden md:block md:w-[35%] space-y-4 overflow-y-auto">
-            {/* Critical Alerts Section */}
-            <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-              <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
-                <AlertTriangle className="w-5 h-5 mr-2 text-red-600" />
-                Critical Alerts
-              </h3>
-              <div className="space-y-2">
-                <div className="p-3 bg-red-50 border-l-4 border-red-600 rounded">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold text-red-900">Theatre 3 - Equipment Issue</p>
-                      <p className="text-xs text-red-700 mt-1">Laparoscopy tower malfunction - Urgent repair needed</p>
-                      <p className="text-xs text-red-600 mt-1">08:45 AM</p>
-                    </div>
-                    <XCircle className="w-4 h-4 text-red-600 cursor-pointer hover:text-red-800" />
-                  </div>
-                </div>
-                <div className="p-3 bg-orange-50 border-l-4 border-orange-600 rounded">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold text-orange-900">Theatre 6 - Staff Relief Urgent</p>
-                      <p className="text-xs text-orange-700 mt-1">RN Chen needs relief - 12 hour shift ongoing</p>
-                      <p className="text-xs text-orange-600 mt-1">10:15 AM</p>
-                    </div>
-                    <XCircle className="w-4 h-4 text-orange-600 cursor-pointer hover:text-orange-800" />
-                  </div>
-                </div>
-                <div className="p-3 bg-yellow-50 border-l-4 border-yellow-600 rounded">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold text-yellow-900">DSU 2 - Case Delay</p>
-                      <p className="text-xs text-yellow-700 mt-1">Patient not yet arrived - 30 min delay expected</p>
-                      <p className="text-xs text-yellow-600 mt-1">11:20 AM</p>
-                    </div>
-                    <XCircle className="w-4 h-4 text-yellow-600 cursor-pointer hover:text-yellow-800" />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Upcoming Cases Section */}
-            <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-              <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
-                <Calendar className="w-5 h-5 mr-2 text-blue-600" />
-                Upcoming Cases
-              </h3>
-              <div className="space-y-2">
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-sm font-semibold text-blue-900">Theatre 1 - 13:00</p>
-                    <span className="text-xs px-2 py-0.5 bg-blue-600 text-white rounded font-medium">Next</span>
-                  </div>
-                  <p className="text-xs text-blue-700">Total Hip Replacement</p>
-                  <p className="text-xs text-blue-600 mt-1">Orthopaedics • Mr. Thompson</p>
-                </div>
-                <div className="p-3 bg-gray-50 border border-gray-200 rounded">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-sm font-semibold text-gray-900">Theatre 4 - 14:00</p>
-                    <span className="text-xs px-2 py-0.5 bg-gray-400 text-white rounded font-medium">Scheduled</span>
-                  </div>
-                  <p className="text-xs text-gray-700">Laparoscopic Cholecystectomy</p>
-                  <p className="text-xs text-gray-600 mt-1">General Surgery • Mr. Davies</p>
-                </div>
-                <div className="p-3 bg-gray-50 border border-gray-200 rounded">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-sm font-semibold text-gray-900">Theatre 7 - 14:30</p>
-                    <span className="text-xs px-2 py-0.5 bg-gray-400 text-white rounded font-medium">Scheduled</span>
-                  </div>
-                  <p className="text-xs text-gray-700">Coronary Artery Bypass</p>
-                  <p className="text-xs text-gray-600 mt-1">Cardiothoracic • Mr. Williams</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Critical Equipment Status Section */}
-            <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-              <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
-                <Package className="w-5 h-5 mr-2 text-purple-600" />
-                Critical Equipment Status
-              </h3>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between p-2 bg-red-50 rounded">
-                  <div className="flex items-center">
-                    <AlertCircle className="w-4 h-4 text-red-600 mr-2" />
-                    <div>
-                      <p className="text-sm font-semibold text-red-900">Laparoscopy Tower</p>
-                      <p className="text-xs text-red-700">Theatre 3</p>
-                    </div>
-                  </div>
-                  <span className="text-xs px-2 py-0.5 bg-red-600 text-white rounded font-medium">Down</span>
-                </div>
-                <div className="flex items-center justify-between p-2 bg-yellow-50 rounded">
-                  <div className="flex items-center">
-                    <AlertCircle className="w-4 h-4 text-yellow-600 mr-2" />
-                    <div>
-                      <p className="text-sm font-semibold text-yellow-900">C-Arm X-Ray</p>
-                      <p className="text-xs text-yellow-700">Theatre 5</p>
-                    </div>
-                  </div>
-                  <span className="text-xs px-2 py-0.5 bg-yellow-600 text-white rounded font-medium">Maintenance</span>
-                </div>
-                <div className="flex items-center justify-between p-2 bg-green-50 rounded">
-                  <div className="flex items-center">
-                    <CheckCircle className="w-4 h-4 text-green-600 mr-2" />
-                    <div>
-                      <p className="text-sm font-semibold text-green-900">Ventilators</p>
-                      <p className="text-xs text-green-700">All Theatres</p>
-                    </div>
-                  </div>
-                  <span className="text-xs px-2 py-0.5 bg-green-600 text-white rounded font-medium">OK</span>
-                </div>
-                <div className="flex items-center justify-between p-2 bg-green-50 rounded">
-                  <div className="flex items-center">
-                    <CheckCircle className="w-4 h-4 text-green-600 mr-2" />
-                    <div>
-                      <p className="text-sm font-semibold text-green-900">Monitors</p>
-                      <p className="text-xs text-green-700">All Theatres</p>
-                    </div>
-                  </div>
-                  <span className="text-xs px-2 py-0.5 bg-green-600 text-white rounded font-medium">OK</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Relief Requests Section */}
-            <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-              <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
-                <UserCheck className="w-5 h-5 mr-2 text-orange-600" />
-                Relief Requests
-              </h3>
-              <div className="space-y-2">
-                <div className="p-3 bg-orange-50 border-l-4 border-orange-600 rounded">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-sm font-semibold text-orange-900">RN Sarah Chen</p>
-                    <span className="text-xs px-2 py-0.5 bg-orange-600 text-white rounded font-medium">Urgent</span>
-                  </div>
-                  <p className="text-xs text-orange-700">Theatre 6 • Scrub Nurse</p>
-                  <p className="text-xs text-orange-600 mt-1">On duty since 08:00 • 12 hours</p>
-                </div>
-                <div className="p-3 bg-yellow-50 border-l-4 border-yellow-600 rounded">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-sm font-semibold text-yellow-900">ODP Michael Torres</p>
-                    <span className="text-xs px-2 py-0.5 bg-yellow-600 text-white rounded font-medium">Pending</span>
-                  </div>
-                  <p className="text-xs text-yellow-700">Theatre 1 • Anaesthetic Practitioner</p>
-                  <p className="text-xs text-yellow-600 mt-1">On duty since 08:00 • 11 hours</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Wellbeing Breaks Section */}
-            <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-              <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
-                <Coffee className="w-5 h-5 mr-2 text-teal-600" />
-                Wellbeing Breaks
-              </h3>
-              <div className="space-y-2">
-                <div className="p-3 bg-teal-50 border border-teal-200 rounded">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-sm font-semibold text-teal-900">RN Emma Wilson</p>
-                    <span className="text-xs px-2 py-0.5 bg-teal-600 text-white rounded font-medium">On Break</span>
-                  </div>
-                  <p className="text-xs text-teal-700">Theatre 2 • Scrub Nurse</p>
-                  <p className="text-xs text-teal-600 mt-1">Break started: 11:30 • Returns: 12:00</p>
-                </div>
-                <div className="p-3 bg-gray-50 border border-gray-200 rounded">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-sm font-semibold text-gray-900">Dr. James Parker</p>
-                    <span className="text-xs px-2 py-0.5 bg-gray-400 text-white rounded font-medium">Scheduled</span>
-                  </div>
-                  <p className="text-xs text-gray-700">Theatre 5 • Anaesthetist</p>
-                  <p className="text-xs text-gray-600 mt-1">Break scheduled: 13:00</p>
-                </div>
-              </div>
-            </div>
-        </div>
-        {/* End RIGHT PANEL */}
-      </div>
       </div>
 
       {/* Modals */}
       <TheatreTimelineModal
         isOpen={showTimeline}
-        onClose={() => {
-          setShowTimeline(false);
-          setSelectedTheatre(null);
-        }}
-        theatre={selectedTheatre || ''}
-      />
-
-      {/* Staff Relief Request Modal */}
+        onClose={() => { setShowTimeline(false); setSelectedTheatre(null); }}
+        theatre={selectedTheatre || ''} />
       <StaffReliefModal
         isOpen={showReliefModal}
-        onClose={() => {
-          setShowReliefModal(false);
-          setSelectedStaffForRelief(null);
-        }}
-        staffMember={selectedStaffForRelief}
-      />
-
-      {/* Staff Hover Card */}
-      <StaffHoverCard
-        staff={hoveredStaff}
-        visible={!!hoveredStaff}
-        position={hoverPosition}
-      />
-
-      {/* Staff Competency Modal */}
+        onClose={() => { setShowReliefModal(false); setSelectedStaffForRelief(null); }}
+        staffMember={selectedStaffForRelief} />
+      <StaffHoverCard staff={hoveredStaff} visible={!!hoveredStaff} position={hoverPosition} />
       <StaffCompetencyModal
         isOpen={showCompetencyModal}
-        onClose={() => {
-          setShowCompetencyModal(false);
-          setSelectedStaffForCompetency(null);
-        }}
+        onClose={() => { setShowCompetencyModal(false); setSelectedStaffForCompetency(null); }}
+        staff={selectedStaffForCompetency} />
+      <StaffInfoMobileModal
+        isOpen={showMobileStaffInfo}
+        onClose={() => setShowMobileStaffInfo(false)}
         staff={selectedStaffForCompetency}
-      />
-
-      {/* Theatre Operations Modal */}
-      <TheatreOpsModal
-        isOpen={showTheatreOpsModal}
-        onClose={() => setShowTheatreOpsModal(false)}
-        selectedUnit={selectedUnit}
-      />
-
-      {/* Staff Duty Modal */}
+        onViewFullProfile={() => { setShowMobileStaffInfo(false); setShowCompetencyModal(true); }} />
+      <TheatreOpsModal isOpen={showTheatreOpsModal} onClose={() => setShowTheatreOpsModal(false)} selectedUnit={selectedUnit} />
       <StaffDutyModal
         isOpen={showStaffDutyModal}
         onClose={() => setShowStaffDutyModal(false)}
-        onNavigateToRoster={() => {
-          // TODO: Navigate to Staff Roster tab when tab navigation is implemented
-          setShowStaffDutyModal(false);
-          console.log('Navigate to Staff Roster tab');
-        }}
-        selectedUnit={selectedUnit}
-      />
-
-      {/* Turnover Time Modal */}
-      <TurnoverTimeModal
-        isOpen={showTurnoverModal}
-        onClose={() => setShowTurnoverModal(false)}
-      />
-
-      {/* Efficiency Score Modal */}
-      <EfficiencyScoreModal
-        isOpen={showEfficiencyModal}
-        onClose={() => setShowEfficiencyModal(false)}
-      />
+        onNavigateToRoster={() => { setShowStaffDutyModal(false); console.log('Navigate to Staff Roster tab'); }}
+        selectedUnit={selectedUnit} />
+      <TurnoverTimeModal isOpen={showTurnoverModal} onClose={() => setShowTurnoverModal(false)} />
+      <EfficiencyScoreModal isOpen={showEfficiencyModal} onClose={() => setShowEfficiencyModal(false)} />
     </div>
   );
 }
