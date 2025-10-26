@@ -87,7 +87,7 @@ export const surgeons: Surgeon[] = [
 
 export const anaesthetists: StaffMember[] = [
   { name: 'Dr. F. James', role: 'Anaesthetist', shift: '08:00-20:00' },
-  { name: 'Dr. B. Thompson', role: 'Anaesthetist', shift: '07:00-19:00' },
+  { name: 'Dr. B. Thompson', role: 'Anaesthetist', shift: '08:00-19:00' },
   { name: 'Dr. D. Mitchell', role: 'Anaesthetist', shift: '08:00-20:00' },
   { name: 'Dr. K. Baker', role: 'Anaesthetist', shift: '08:00-20:00' },
   { name: 'Dr. R. Phillips', role: 'Anaesthetist', shift: '08:00-18:00' },

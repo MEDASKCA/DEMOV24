@@ -54,7 +54,7 @@ export default function StaffPage() {
       name: 'Dr. F. James',
       role: 'Consultant Anaesthetist',
       assignedTo: 'Main Theatre 1',
-      scheduledStart: '07:00',
+      scheduledStart: '08:00',
       expectedArrival: '09:15',
       reason: 'Managing emergency in Theatre 5',
       impact: 'No delay - covered'

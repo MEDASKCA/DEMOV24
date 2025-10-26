@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import BottomNav from '@/components/BottomNav';
 import SubMenuModal from '@/components/SubMenuModal';
 import FeedsView from '@/components/views/FeedsView';
@@ -11,6 +12,7 @@ import DesktopRoster from '@/features/roster/components/DesktopRoster';
 import { ChevronDown, User, Settings, HelpCircle, LogOut } from 'lucide-react';
 
 export default function Home() {
+  const router = useRouter();
   const [currentPage, setCurrentPage] = useState<'feeds' | 'chat' | 'theatres' | 'staff' | 'alerts' | 'menu'>('theatres');
   const [currentView, setCurrentView] = useState<string>('feeds');
   const [showSubMenu, setShowSubMenu] = useState(false);
@@ -51,7 +53,7 @@ export default function Home() {
     // Theatre views - Desktop shows view based on currentView, Mobile shows accordions
     if (currentPage === 'theatres') {
       return (
-        <>
+        <div className="h-full w-full">
           {/* Desktop View - Render based on currentView (hidden on mobile) */}
           <div className="hidden md:block h-full">
             {currentView === 'feeds' && <DashboardView />}
@@ -478,8 +480,8 @@ export default function Home() {
               )}
             </div>
           </div>
-          </div>
-        </>
+        </div>
+        </div>
       );
     }
 

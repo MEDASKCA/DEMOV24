@@ -97,7 +97,7 @@ export default function StaffReliefModal({ isOpen, onClose }: StaffReliefModalPr
         name: 'S. Patel',
         role: 'Anaes N/P',
         theatre: 'Main Theatre 3',
-        currentShiftStart: '07:00'
+        currentShiftStart: '08:00'
       },
       reason: 'Coffee/Rest Break',
       duration: '15 min',
@@ -125,7 +125,7 @@ export default function StaffReliefModal({ isOpen, onClose }: StaffReliefModalPr
         name: 'RN K. Thompson',
         role: 'Scrub N/P',
         theatre: 'Main Theatre 8',
-        currentShiftStart: '07:00'
+        currentShiftStart: '08:00'
       },
       reason: 'Lunch Break',
       duration: '30 min',

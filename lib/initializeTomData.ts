@@ -842,7 +842,7 @@ async function initializeShifts() {
     { id: 'shift-10', staffId: 'staff-10', date: today, type: 'long-day', startTime: '07:30', endTime: '16:30', role: 'recovery-nurse', status: 'confirmed' },
 
     // Coordinator
-    { id: 'shift-11', staffId: 'staff-11', date: today, type: 'long-day', startTime: '07:00', endTime: '15:00', role: 'coordinator', status: 'confirmed' },
+    { id: 'shift-11', staffId: 'staff-11', date: today, type: 'long-day', startTime: '08:00', endTime: '15:00', role: 'coordinator', status: 'confirmed' },
   ];
 
   for (const shift of shifts) {

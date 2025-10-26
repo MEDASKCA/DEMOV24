@@ -111,7 +111,7 @@ export default function StaffReliefModal({ isOpen, onClose }: StaffReliefModalPr
         name: 'S. Patel',
         role: 'Anaes N/P',
         theatre: 'Main Theatre 3',
-        currentShiftStart: '07:00'
+        currentShiftStart: '08:00'
       },
       reason: 'Coffee/Rest Break',
       duration: '15 min',
@@ -139,7 +139,7 @@ export default function StaffReliefModal({ isOpen, onClose }: StaffReliefModalPr
         name: 'RN K. Thompson',
         role: 'Scrub N/P',
         theatre: 'Main Theatre 8',
-        currentShiftStart: '07:00'
+        currentShiftStart: '08:00'
       },
       reason: 'Lunch Break',
       duration: '30 min',
@@ -365,21 +365,21 @@ export default function StaffReliefModal({ isOpen, onClose }: StaffReliefModalPr
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-100 bg-opacity-95 flex items-center justify-center z-50">
-      <div className="bg-white shadow-xl w-full h-full overflow-hidden flex flex-col md:flex-row">
+    <div className="fixed inset-0 z-50 bg-white lg:bg-black lg:bg-opacity-40 lg:backdrop-blur-sm flex items-center justify-center lg:p-4">
+      <div className="bg-white lg:rounded-2xl lg:shadow-2xl w-full lg:max-w-7xl h-full lg:h-[90vh] overflow-hidden flex flex-col md:flex-row">
         {/* Left Panel - Relief Requests List */}
         <div className="w-1/4 sm:w-1/3 md:w-80 lg:w-96 bg-gray-50 border-r border-gray-200 flex flex-col flex-shrink-0">
           {/* Header */}
-          <div className="bg-gradient-to-r from-orange-600 to-orange-700 text-white p-2">
+          <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 text-white px-6 py-5 flex-shrink-0">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
                 <Bell className="w-6 h-6" />
                 <div>
-                  <h2 className="text-base md:text-xl font-bold">Relief Requests</h2>
-                  <p className="text-orange-100 text-xs hidden md:block">Manage staff relief deployment</p>
+                  <h2 className="text-lg font-bold">Relief Requests</h2>
+                  <p className="text-blue-100 text-xs mt-1">Manage staff relief deployment</p>
                 </div>
               </div>
-              <button onClick={onClose} className="p-2 hover:bg-orange-800 rounded-lg transition-colors">
+              <button onClick={onClose} className="p-2 hover:bg-blue-800 rounded-lg transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -472,9 +472,9 @@ export default function StaffReliefModal({ isOpen, onClose }: StaffReliefModalPr
           {selectedRequest ? (
             <>
               {/* Selected Request Header */}
-              <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-4 border-b border-blue-800">
+              <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 text-white px-6 py-5 border-b border-blue-800 flex-shrink-0">
                 <h3 className="text-lg font-bold">Deploy Relief Staff</h3>
-                <p className="text-blue-100 text-sm mt-1">
+                <p className="text-blue-100 text-xs mt-1">
                   Relief for: {selectedRequestData?.requestedBy.name} ({selectedRequestData?.requestedBy.role}) - {selectedRequestData?.requestedBy.theatre}
                 </p>
                 <div className="mt-2 flex items-center space-x-4 text-sm">
@@ -624,23 +624,23 @@ export default function StaffReliefModal({ isOpen, onClose }: StaffReliefModalPr
           ) : (
             <div className="flex-1 flex flex-col overflow-hidden">
               {/* Overview Header */}
-              <div className="bg-gradient-to-r from-purple-600 to-purple-700 text-white p-2 border-b border-purple-800">
-                <h3 className="text-base md:text-lg font-bold">Wellbeing Breaks</h3>
-                <p className="text-purple-100 text-xs mt-1 hidden md:block">
+              <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 text-white px-6 py-5 border-b border-blue-800 flex-shrink-0">
+                <h3 className="text-lg font-bold">Wellbeing Breaks</h3>
+                <p className="text-blue-100 text-xs mt-1">
                   Lunch (30 min) for 9+ hour shifts • Supper (30 min) for 11+ hour shifts
                 </p>
               </div>
 
               {/* Filter Buttons */}
-              <div className="bg-white border-b border-gray-200 p-2">
-                <div className="flex items-center space-x-2">
-                  <Filter className="w-4 h-4 text-gray-500" />
+              <div className="bg-white border-b border-gray-200 p-3 flex-shrink-0">
+                <div className="flex items-center space-x-2 flex-wrap">
+                  <Filter className="w-3 h-3 text-gray-500" />
                   <span className="text-xs font-medium text-gray-700">Filter:</span>
                   <button
                     onClick={() => setBreakFilter('all')}
-                    className={`px-3 py-1.5 rounded text-xs font-medium transition-all ${
+                    className={`px-2 py-1 rounded text-[10px] font-medium transition-all ${
                       breakFilter === 'all'
-                        ? 'bg-purple-600 text-white'
+                        ? 'bg-blue-600 text-white'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                   >
@@ -648,7 +648,7 @@ export default function StaffReliefModal({ isOpen, onClose }: StaffReliefModalPr
                   </button>
                   <button
                     onClick={() => setBreakFilter('no_break')}
-                    className={`px-3 py-1.5 rounded text-xs font-medium transition-all ${
+                    className={`px-2 py-1 rounded text-[10px] font-medium transition-all ${
                       breakFilter === 'no_break'
                         ? 'bg-red-600 text-white'
                         : 'bg-red-50 text-red-700 border border-red-200 hover:bg-red-100'
@@ -658,7 +658,7 @@ export default function StaffReliefModal({ isOpen, onClose }: StaffReliefModalPr
                   </button>
                   <button
                     onClick={() => setBreakFilter('overdue')}
-                    className={`px-3 py-1.5 rounded text-xs font-medium transition-all ${
+                    className={`px-2 py-1 rounded text-[10px] font-medium transition-all ${
                       breakFilter === 'overdue'
                         ? 'bg-orange-600 text-white'
                         : 'bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100'
@@ -668,7 +668,7 @@ export default function StaffReliefModal({ isOpen, onClose }: StaffReliefModalPr
                   </button>
                   <button
                     onClick={() => setBreakFilter('taken')}
-                    className={`px-3 py-1.5 rounded text-xs font-medium transition-all ${
+                    className={`px-2 py-1 rounded text-[10px] font-medium transition-all ${
                       breakFilter === 'taken'
                         ? 'bg-green-600 text-white'
                         : 'bg-green-50 text-green-700 border border-green-200 hover:bg-green-100'

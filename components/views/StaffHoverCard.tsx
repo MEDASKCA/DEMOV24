@@ -12,7 +12,8 @@ import {
   Activity,
   CheckCircle,
   XCircle,
-  AlertCircle
+  AlertCircle,
+  Briefcase
 } from 'lucide-react';
 
 interface StaffHoverCardProps {
@@ -32,21 +33,18 @@ export default function StaffHoverCard({ staff, visible, position }: StaffHoverC
   const calculatePosition = () => {
     if (!position) return { left: 0, top: 0, transform: 'translate(-50%, 0)' };
 
-    const cardWidth = 384; // w-96 = 384px
-    const cardMaxHeight = window.innerHeight * 0.8; // 80vh
-    const margin = 20; // spacing from edge
-    const cursorOffset = 15; // small gap from cursor
+    const cardWidth = 420; // Slightly wider for better layout
+    const cardMaxHeight = window.innerHeight * 0.85;
+    const margin = 20;
+    const cursorOffset = 15;
 
-    // Determine cursor position in viewport
     const viewportHeight = window.innerHeight;
     const viewportWidth = window.innerWidth;
 
-    // Vertical thirds: top, middle, bottom
     const isTopThird = position.y < viewportHeight / 3;
     const isBottomThird = position.y > (viewportHeight * 2) / 3;
     const isMiddleVertical = !isTopThird && !isBottomThird;
 
-    // Horizontal halves: left, right
     const isLeftHalf = position.x < viewportWidth / 2;
     const isRightHalf = !isLeftHalf;
 
@@ -54,18 +52,14 @@ export default function StaffHoverCard({ staff, visible, position }: StaffHoverC
     let top = position.y;
     let transform = 'translate(-50%, 0)';
 
-    // Horizontal positioning
     if (isRightHalf) {
-      // Position to the left of cursor
       left = position.x - cursorOffset;
       transform = 'translate(-100%, 0)';
     } else {
-      // Position to the right of cursor
       left = position.x + cursorOffset;
       transform = 'translate(0, 0)';
     }
 
-    // Ensure card doesn't go off horizontal edges
     if (left + cardWidth > viewportWidth - margin) {
       left = viewportWidth - cardWidth - margin;
       transform = 'translate(0, 0)';
@@ -75,19 +69,14 @@ export default function StaffHoverCard({ staff, visible, position }: StaffHoverC
       transform = 'translate(0, 0)';
     }
 
-    // Vertical positioning
     if (isBottomThird) {
-      // Position card higher, centered vertically around middle of screen
       top = viewportHeight / 2 - cardMaxHeight / 2;
     } else if (isMiddleVertical) {
-      // Center card vertically around cursor, slightly offset
       top = position.y - cardMaxHeight / 2;
     } else {
-      // Top third - position below cursor
       top = position.y + cursorOffset;
     }
 
-    // Ensure card doesn't go off vertical edges
     if (top + cardMaxHeight > viewportHeight - margin) {
       top = viewportHeight - cardMaxHeight - margin;
     }
@@ -100,15 +89,13 @@ export default function StaffHoverCard({ staff, visible, position }: StaffHoverC
 
   const smartPosition = calculatePosition();
 
-  // Determine role type
   const isConsultant = staff.role.includes('Consultant');
   const isAssistant = staff.role.includes('Assistant');
   const isAnaesthetist = staff.role.includes('Anaesthetist') && !staff.role.includes('Nurse') && !staff.role.includes('N/P');
   const isSeniorStaff = isConsultant || isAssistant || isAnaesthetist;
 
-  // Mock detailed staff data - in production, this would come from database
+  // Mock detailed staff data
   const getStaffDetails = () => {
-    // Different data for senior staff vs nursing/practitioner staff
     if (isConsultant) {
       return {
         employeeId: 'NHS-4521',
@@ -155,7 +142,7 @@ export default function StaffHoverCard({ staff, visible, position }: StaffHoverC
         department: 'Anaesthetics',
         grade: 'Consultant Anaesthetist',
         currentLocation: 'Main Theatre 1',
-        shiftStart: '07:00',
+        shiftStart: '08:00',
         shiftEnd: '19:00',
         status: 'Arriving Late',
         arrivingLate: true,
@@ -170,17 +157,16 @@ export default function StaffHoverCard({ staff, visible, position }: StaffHoverC
         }
       };
     } else {
-      // Nursing/Practitioner staff
       return {
         employeeId: 'NHS-2847',
         department: 'Anaesthetics',
         grade: 'Band 6',
         currentLocation: 'Theatre 1 - Orthopaedics',
-        shiftStart: '07:00',
+        shiftStart: '08:00',
         shiftEnd: '19:00',
         breakStatus: {
           taken: false,
-          lastBreak: '07:00',
+          lastBreak: '08:00',
           nextDue: '11:00',
           totalBreaks: '0/3'
         },
@@ -214,21 +200,20 @@ export default function StaffHoverCard({ staff, visible, position }: StaffHoverC
 
   const getCompetencyColor = (level: string) => {
     switch (level) {
-      case 'Expert': return 'bg-green-100 text-green-700 border-green-300';
-      case 'Competent': return 'bg-blue-100 text-blue-700 border-blue-300';
-      case 'Learning': return 'bg-yellow-100 text-yellow-700 border-yellow-300';
-      default: return 'bg-gray-100 text-gray-700 border-gray-300';
+      case 'Expert': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      case 'Competent': return 'bg-sky-50 text-sky-700 border-sky-200';
+      case 'Learning': return 'bg-amber-50 text-amber-700 border-amber-200';
+      default: return 'bg-gray-50 text-gray-700 border-gray-200';
     }
   };
 
-  // Determine if this role should show competencies
   const showCompetencies = staff.role.includes('Scrub') || staff.role.includes('Anaes N/P') || staff.role.includes('Anaesthetic Nurse');
   const isScrubRole = staff.role.includes('Scrub');
   const isAnaesNP = staff.role.includes('Anaes N/P') || staff.role.includes('Anaesthetic Nurse');
 
   return (
     <div
-      className="hidden lg:block lg:fixed z-[60] bg-white rounded-lg shadow-2xl border border-gray-200 w-96 max-h-[80vh] overflow-y-auto p-4"
+      className="hidden lg:block lg:fixed z-[60] bg-white rounded-xl shadow-2xl border-2 border-blue-100 w-[420px] max-h-[85vh] overflow-y-auto"
       style={{
         left: `${smartPosition.left}px`,
         top: `${smartPosition.top}px`,
@@ -237,223 +222,233 @@ export default function StaffHoverCard({ staff, visible, position }: StaffHoverC
       onMouseEnter={(e) => e.stopPropagation()}
       onMouseLeave={(e) => e.stopPropagation()}
     >
-      {/* Header */}
-      <div className="border-b border-gray-200 pb-3 mb-3">
+      {/* Header Section - EPIC Blue Theme */}
+      <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-5 py-4 rounded-t-xl">
         <div className="flex items-start justify-between">
-          <div>
-            <h3 className="font-bold text-gray-900 text-lg">{staff.name}</h3>
-            <p className="text-sm text-gray-600">{staff.role} • {staffDetails.grade}</p>
-            <p className="text-xs text-gray-500 mt-1">ID: {staffDetails.employeeId}</p>
+          <div className="flex-1">
+            <div className="flex items-center space-x-2 mb-1">
+              <User className="w-5 h-5" />
+              <h3 className="font-bold text-white text-lg">{staff.name}</h3>
+            </div>
+            <p className="text-blue-100 text-sm font-medium">{staff.role}</p>
+            <p className="text-blue-100 text-xs mt-1">{staffDetails.grade} • ID: {staffDetails.employeeId}</p>
           </div>
-          <div className="text-right">
-            <p className="text-xs text-gray-500">Shift</p>
-            <p className="text-sm font-medium">{staffDetails.shiftStart} - {staffDetails.shiftEnd}</p>
+          <div className="text-right bg-blue-800 bg-opacity-40 px-3 py-2 rounded-lg">
+            <p className="text-xs text-blue-100 mb-1">Shift Today</p>
+            <p className="text-sm font-bold text-white">{staffDetails.shiftStart} - {staffDetails.shiftEnd}</p>
           </div>
         </div>
       </div>
 
-      {/* Status - Different for senior staff vs N/P */}
-      {isSeniorStaff ? (
-        <>
-          {/* Senior Staff Status */}
-          <div className={`rounded-lg p-3 mb-3 ${(staffDetails as any).arrivingLate ? 'bg-orange-50 border border-orange-200' : 'bg-green-50 border border-green-200'}`}>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-gray-700">Status</span>
-              <span className={`text-xs font-medium px-2 py-1 rounded ${(staffDetails as any).arrivingLate ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
-                {(staffDetails as any).status}
-              </span>
-            </div>
-            {(staffDetails as any).arrivingLate && (staffDetails as any).lateReason && (
-              <div className="bg-white rounded p-2 text-xs text-orange-800 mb-2">
-                <AlertCircle className="w-3 h-3 inline mr-1" />
-                <strong>Reason:</strong> {(staffDetails as any).lateReason}
-              </div>
-            )}
-          </div>
-
-          {/* Message/Instructions */}
-          {(staffDetails as any).message && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
-              <h4 className="text-xs font-semibold text-blue-900 mb-1 flex items-center">
-                <Activity className="w-3 h-3 mr-1" />
-                Message
-              </h4>
-              <p className="text-xs text-blue-800">{(staffDetails as any).message}</p>
-            </div>
-          )}
-
-          {/* Additional Notes */}
-          {(staffDetails as any).additionalNotes && (
-            <div className="bg-gray-50 rounded-lg p-2 mb-3">
-              <p className="text-xs text-gray-700">
-                <strong>Note:</strong> {(staffDetails as any).additionalNotes}
-              </p>
-            </div>
-          )}
-
-          {/* Today's Activity for Senior Staff */}
-          <div className="bg-gray-50 rounded-lg p-3 mb-3">
-            <h4 className="text-xs font-semibold text-gray-700 mb-2">Today's Activity</h4>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div>
-                <span className="text-gray-600">Cases Scheduled:</span>
-                <span className="font-medium ml-1">{(staffDetails as any).todaysActivity.casesScheduled}</span>
-              </div>
-              <div>
-                <span className="text-gray-600">Completed:</span>
-                <span className="font-medium ml-1">{(staffDetails as any).todaysActivity.casesCompleted}</span>
-              </div>
-              <div className="col-span-2">
-                <span className="text-gray-600">Current:</span>
-                <span className="font-medium ml-1">{(staffDetails as any).todaysActivity.currentCase}</span>
-              </div>
-            </div>
-          </div>
-        </>
-      ) : (
-        <>
-          {/* N/P Staff Status */}
-          <div className="bg-gray-50 rounded-lg p-2 mb-3">
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="flex items-center space-x-1">
-                <MapPin className="w-3 h-3 text-gray-400" />
-                <span className="font-medium">Location:</span>
-                <span className="text-gray-600">{(staffDetails as any).currentLocation}</span>
-              </div>
-              <div className="flex items-center space-x-1">
-                <Coffee className="w-3 h-3 text-gray-400" />
-                <span className="font-medium">Breaks:</span>
-                <span className={(staffDetails as any).breakStatus.taken ? 'text-green-600' : 'text-orange-600'}>
-                  {(staffDetails as any).breakStatus.totalBreaks}
+      {/* Content Sections */}
+      <div className="p-5 space-y-4">
+        {/* Status Section - Different for senior staff vs N/P */}
+        {isSeniorStaff ? (
+          <>
+            {/* Senior Staff Status Card */}
+            <div className={`rounded-lg p-4 border-2 ${(staffDetails as any).arrivingLate ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'}`}>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-bold text-gray-600 uppercase tracking-wide">Current Status</span>
+                <span className={`text-xs font-bold px-3 py-1.5 rounded-full ${(staffDetails as any).arrivingLate ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                  {(staffDetails as any).status}
                 </span>
               </div>
+              {(staffDetails as any).arrivingLate && (staffDetails as any).lateReason && (
+                <div className="bg-white border border-amber-200 rounded-lg p-3 text-xs text-amber-900">
+                  <AlertCircle className="w-4 h-4 inline mr-2 text-amber-600" />
+                  <span className="font-semibold">Reason:</span> {(staffDetails as any).lateReason}
+                </div>
+              )}
             </div>
-            {!(staffDetails as any).breakStatus.taken && (
-              <div className="mt-2 px-2 py-1 bg-yellow-100 text-yellow-700 rounded text-xs">
-                ⚠️ Break overdue - Last break at {(staffDetails as any).breakStatus.lastBreak}
+
+            {/* Message/Instructions Card */}
+            {(staffDetails as any).message && (
+              <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+                <h4 className="text-xs font-bold text-blue-900 mb-2 flex items-center uppercase tracking-wide">
+                  <Activity className="w-4 h-4 mr-2" />
+                  Clinical Notes
+                </h4>
+                <p className="text-sm text-blue-800 leading-relaxed">{(staffDetails as any).message}</p>
+                {(staffDetails as any).additionalNotes && (
+                  <div className="mt-3 pt-3 border-t border-blue-200">
+                    <p className="text-xs text-blue-700">
+                      <span className="font-semibold">Additional:</span> {(staffDetails as any).additionalNotes}
+                    </p>
+                  </div>
+                )}
               </div>
             )}
-          </div>
-        </>
-      )}
 
-      {/* Competencies - Only show for Scrub N/P and Anaes N/P */}
-      {showCompetencies && (
-        <div className="mb-3">
-          <h4 className="text-xs font-semibold text-gray-700 mb-2 flex items-center">
-            <Award className="w-3 h-3 mr-1" />
-            {isScrubRole ? 'Scrub Competencies & Certifications' : 'Anaesthetic Skills & Certifications'}
-          </h4>
-          <div className="space-y-1">
-            {isScrubRole ? (
-              // Scrub staff - show surgical specialties
-              staffDetails.competencies.map((comp, idx) => (
-                <div
-                  key={idx}
-                  className={`flex items-center justify-between px-2 py-1 rounded border text-xs ${getCompetencyColor(comp.level)}`}
-                >
-                  <span className="font-medium">{comp.specialty}</span>
-                  <div className="flex items-center space-x-1">
-                    <span>{comp.level}</span>
-                    {comp.certified && <Shield className="w-3 h-3" />}
-                  </div>
+            {/* Today's Activity - Senior Staff */}
+            <div className="bg-gray-50 border-2 border-gray-200 rounded-lg p-4">
+              <h4 className="text-xs font-bold text-gray-700 mb-3 uppercase tracking-wide flex items-center">
+                <Briefcase className="w-4 h-4 mr-2" />
+                Today's Activity
+              </h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-white rounded-lg p-2.5 border border-gray-200">
+                  <span className="text-xs text-gray-600 block mb-0.5">Scheduled</span>
+                  <span className="text-lg font-bold text-gray-900">{(staffDetails as any).todaysActivity.casesScheduled}</span>
                 </div>
-              ))
-            ) : (
-              // Anaes N/P - show anaesthetic skills
-              [
-                { specialty: 'General Anaesthesia', level: 'Expert', certified: true },
-                { specialty: 'Regional Anaesthesia', level: 'Expert', certified: true },
-                { specialty: 'Paediatric Anaesthesia', level: 'Competent', certified: true },
-                { specialty: 'Airway Management', level: 'Expert', certified: true },
-                { specialty: 'Crisis Management', level: 'Competent', certified: false }
-              ].map((comp, idx) => (
-                <div
-                  key={idx}
-                  className={`flex items-center justify-between px-2 py-1 rounded border text-xs ${getCompetencyColor(comp.level)}`}
-                >
-                  <span className="font-medium">{comp.specialty}</span>
-                  <div className="flex items-center space-x-1">
-                    <span>{comp.level}</span>
-                    {comp.certified && <Shield className="w-3 h-3" />}
-                  </div>
+                <div className="bg-white rounded-lg p-2.5 border border-gray-200">
+                  <span className="text-xs text-gray-600 block mb-0.5">Completed</span>
+                  <span className="text-lg font-bold text-emerald-600">{(staffDetails as any).todaysActivity.casesCompleted}</span>
                 </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Relief Availability - Only for N/P staff */}
-      {!isSeniorStaff && (
-        <>
-          <div className="mb-3">
-            <h4 className="text-xs font-semibold text-gray-700 mb-2 flex items-center">
-              <Activity className="w-3 h-3 mr-1" />
-              Can Provide Relief In:
-            </h4>
-            <div className="grid grid-cols-2 gap-1 text-xs">
-              {(staffDetails as any).canRelieveIn.map((theatre: any, idx: number) => (
-                <div
-                  key={idx}
-                  className={`flex items-center space-x-1 p-1 rounded ${
-                    theatre.available ? 'bg-green-50' : 'bg-gray-50'
-                  }`}
-                  title={theatre.reason}
-                >
-                  {theatre.available ? (
-                    <CheckCircle className="w-3 h-3 text-green-600" />
-                  ) : (
-                    <XCircle className="w-3 h-3 text-gray-400" />
-                  )}
-                  <span className={theatre.available ? 'text-green-700' : 'text-gray-500'}>
-                    {theatre.theatre}
+                <div className="col-span-2 bg-white rounded-lg p-2.5 border border-gray-200">
+                  <span className="text-xs text-gray-600 block mb-0.5">Current Case</span>
+                  <span className="text-sm font-semibold text-gray-900">{(staffDetails as any).todaysActivity.currentCase}</span>
+                </div>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* N/P Staff Location & Breaks */}
+            <div className="bg-gray-50 border-2 border-gray-200 rounded-lg p-4">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2 text-sm">
+                    <MapPin className="w-4 h-4 text-blue-600" />
+                    <span className="font-semibold text-gray-700">Location:</span>
+                  </div>
+                  <span className="text-sm text-gray-900 font-medium">{(staffDetails as any).currentLocation}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2 text-sm">
+                    <Coffee className="w-4 h-4 text-blue-600" />
+                    <span className="font-semibold text-gray-700">Breaks Taken:</span>
+                  </div>
+                  <span className={`text-sm font-bold ${(staffDetails as any).breakStatus.taken ? 'text-emerald-600' : 'text-amber-600'}`}>
+                    {(staffDetails as any).breakStatus.totalBreaks}
                   </span>
                 </div>
-              ))}
+              </div>
+              {!(staffDetails as any).breakStatus.taken && (
+                <div className="mt-3 px-3 py-2 bg-amber-100 border border-amber-200 text-amber-800 rounded-lg text-xs font-medium">
+                  Break overdue - Last break at {(staffDetails as any).breakStatus.lastBreak}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* Competencies - Only for N/P staff */}
+        {showCompetencies && (
+          <div className="bg-white border-2 border-gray-200 rounded-lg p-4">
+            <h4 className="text-xs font-bold text-gray-700 mb-3 flex items-center uppercase tracking-wide">
+              <Award className="w-4 h-4 mr-2 text-blue-600" />
+              {isScrubRole ? 'Surgical Competencies' : 'Anaesthetic Skills'}
+            </h4>
+            <div className="space-y-2">
+              {isScrubRole ? (
+                staffDetails.competencies.map((comp, idx) => (
+                  <div
+                    key={idx}
+                    className={`flex items-center justify-between px-3 py-2 rounded-lg border ${getCompetencyColor(comp.level)}`}
+                  >
+                    <span className="font-semibold text-sm">{comp.specialty}</span>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-xs font-bold">{comp.level}</span>
+                      {comp.certified && <Shield className="w-4 h-4" />}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                [
+                  { specialty: 'General Anaesthesia', level: 'Expert', certified: true },
+                  { specialty: 'Regional Anaesthesia', level: 'Expert', certified: true },
+                  { specialty: 'Paediatric Anaesthesia', level: 'Competent', certified: true },
+                  { specialty: 'Airway Management', level: 'Expert', certified: true }
+                ].map((comp, idx) => (
+                  <div
+                    key={idx}
+                    className={`flex items-center justify-between px-3 py-2 rounded-lg border ${getCompetencyColor(comp.level)}`}
+                  >
+                    <span className="font-semibold text-sm">{comp.specialty}</span>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-xs font-bold">{comp.level}</span>
+                      {comp.certified && <Shield className="w-4 h-4" />}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
+        )}
 
-          {/* Today's Activity - N/P version */}
-          <div className="bg-blue-50 rounded-lg p-2 mb-3">
-            <h4 className="text-xs font-semibold text-blue-700 mb-1">Today&apos;s Activity</h4>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div>
-                <span className="text-gray-600">Cases:</span>
-                <span className="font-medium ml-1">{(staffDetails as any).todaysActivity.casesCompleted}</span>
-              </div>
-              <div>
-                <span className="text-gray-600">Reliefs:</span>
-                <span className="font-medium ml-1">{(staffDetails as any).todaysActivity.reliefProvided}</span>
-              </div>
-              <div>
-                <span className="text-gray-600">Efficiency:</span>
-                <span className="font-medium ml-1 text-green-600">{(staffDetails as any).todaysActivity.averageEfficiency}</span>
-              </div>
-              <div>
-                <span className="text-gray-600">Overtime:</span>
-                <span className="font-medium ml-1">{(staffDetails as any).todaysActivity.overtime}</span>
+        {/* Relief Availability - Only for N/P staff */}
+        {!isSeniorStaff && (
+          <>
+            <div className="bg-white border-2 border-gray-200 rounded-lg p-4">
+              <h4 className="text-xs font-bold text-gray-700 mb-3 flex items-center uppercase tracking-wide">
+                <Activity className="w-4 h-4 mr-2 text-blue-600" />
+                Relief Availability
+              </h4>
+              <div className="grid grid-cols-2 gap-2">
+                {(staffDetails as any).canRelieveIn.map((theatre: any, idx: number) => (
+                  <div
+                    key={idx}
+                    className={`flex items-center space-x-2 px-2.5 py-2 rounded-lg border ${
+                      theatre.available ? 'bg-emerald-50 border-emerald-200' : 'bg-gray-50 border-gray-200'
+                    }`}
+                    title={theatre.reason}
+                  >
+                    {theatre.available ? (
+                      <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                    ) : (
+                      <XCircle className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                    )}
+                    <span className={`text-xs font-semibold ${theatre.available ? 'text-emerald-700' : 'text-gray-500'}`}>
+                      {theatre.theatre}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
-          </div>
 
-          {/* Last Relief Provided */}
-          {(staffDetails as any).reliefHistory.length > 0 && (
-            <div className="border-t border-gray-200 pt-2">
-              <h4 className="text-xs font-semibold text-gray-700 mb-1">Last Relief Provided</h4>
-              <div className="text-xs text-gray-600">
-                {(staffDetails as any).reliefHistory[0].time} - Relieved {(staffDetails as any).reliefHistory[0].relieved} in{' '}
-                {(staffDetails as any).reliefHistory[0].theatre} ({(staffDetails as any).reliefHistory[0].duration})
+            {/* Today's Activity - N/P version */}
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+              <h4 className="text-xs font-bold text-blue-900 mb-3 uppercase tracking-wide">Today's Performance</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-white rounded-lg p-2.5 border border-blue-200">
+                  <span className="text-xs text-gray-600 block mb-0.5">Cases</span>
+                  <span className="text-lg font-bold text-gray-900">{(staffDetails as any).todaysActivity.casesCompleted}</span>
+                </div>
+                <div className="bg-white rounded-lg p-2.5 border border-blue-200">
+                  <span className="text-xs text-gray-600 block mb-0.5">Reliefs</span>
+                  <span className="text-lg font-bold text-blue-600">{(staffDetails as any).todaysActivity.reliefProvided}</span>
+                </div>
+                <div className="bg-white rounded-lg p-2.5 border border-blue-200">
+                  <span className="text-xs text-gray-600 block mb-0.5">Efficiency</span>
+                  <span className="text-lg font-bold text-emerald-600">{(staffDetails as any).todaysActivity.averageEfficiency}</span>
+                </div>
+                <div className="bg-white rounded-lg p-2.5 border border-blue-200">
+                  <span className="text-xs text-gray-600 block mb-0.5">Overtime</span>
+                  <span className="text-lg font-bold text-gray-900">{(staffDetails as any).todaysActivity.overtime}</span>
+                </div>
               </div>
             </div>
-          )}
-        </>
-      )}
 
-      {/* Audit Note */}
-      <div className="mt-3 pt-2 border-t border-gray-200 text-xs text-gray-500 italic">
-        <AlertCircle className="w-3 h-3 inline mr-1" />
-        All relief activities logged for compliance & documentation
+            {/* Last Relief Provided */}
+            {(staffDetails as any).reliefHistory.length > 0 && (
+              <div className="bg-gray-50 border-t-2 border-gray-200 rounded-lg p-3">
+                <h4 className="text-xs font-bold text-gray-700 mb-2 uppercase tracking-wide">Recent Relief</h4>
+                <div className="text-xs text-gray-700 leading-relaxed">
+                  <span className="font-semibold">{(staffDetails as any).reliefHistory[0].time}</span> - Relieved {(staffDetails as any).reliefHistory[0].relieved} in{' '}
+                  {(staffDetails as any).reliefHistory[0].theatre} ({(staffDetails as any).reliefHistory[0].duration})
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Footer - Compliance Note */}
+      <div className="border-t-2 border-gray-200 bg-gray-50 px-5 py-3 rounded-b-xl">
+        <div className="flex items-center text-xs text-gray-600">
+          <AlertCircle className="w-3.5 h-3.5 mr-2 text-blue-600 flex-shrink-0" />
+          <span className="italic">All staff activities logged for NHS compliance &  documentation</span>
+        </div>
       </div>
     </div>
   );

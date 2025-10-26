@@ -204,7 +204,7 @@ export default function DashboardView() {
       team: {
         surgeon: { name: 'R. Johnson', shift: '08:00 - 18:00' },
         assistant: { name: 'T. Wilson', shift: '08:00 - 18:00' },
-        anaesthetist: { name: 'B. Thompson', shift: '07:00 - 19:00' },
+        anaesthetist: { name: 'B. Thompson', shift: '08:00 - 19:00' },
         anaesNP: { name: 'H. Adams', shift: '08:00 - 16:00' },
         scrubNP1: { name: 'RN M. Garcia ☕', shift: '08:00 - 20:00', scrubbed: true, etf: '14:30', relievedBy: 'RN L. Brown', relievedFrom: 'Main Theatre 3', relievedAt: '09:30' },
         scrubNP2: { name: 'RN L. Brown', shift: '08:00 - 18:00', scrubbed: false },
@@ -373,7 +373,7 @@ export default function DashboardView() {
       team: {
         surgeon: { name: 'V. Ross', shift: '08:00 - 18:00' },
         assistant: { name: 'W. Henderson', shift: '08:00 - 18:00' },
-        anaesthetist: { name: 'X. Coleman ☕', shift: '07:00 - 19:00' },
+        anaesthetist: { name: 'X. Coleman ☕', shift: '08:00 - 19:00' },
         anaesNP: { name: 'Y. Jenkins', shift: '08:00 - 18:00' },
         anaesNP2: { name: 'Z. Perry', shift: '10:00 - 18:00' },
         scrubNP1: { name: 'RN A. Powell', shift: '08:00 - 18:00', scrubbed: true, etf: '13:00', relievedBy: 'ODP B. Long', relievedFrom: 'Main Theatre 11', relievedAt: '10:15' },

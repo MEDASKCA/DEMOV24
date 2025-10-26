@@ -15,9 +15,9 @@ const randomPastDate = () => {
 // Helper to generate shift times
 const generateShift = (type: 'early' | 'late' | 'night') => {
   const shifts = {
-    early: { start: '07:00', end: '15:00' },
+    early: { start: '08:00', end: '15:00' },
     late: { start: '14:00', end: '22:00' },
-    night: { start: '21:00', end: '07:00' }
+    night: { start: '21:00', end: '08:00' }
   };
   return shifts[type];
 };

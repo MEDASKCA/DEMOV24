@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Star, MapPin, Phone, Mail, CheckCircle } from 'lucide-react';
+import { Star, MapPin, Phone, Mail, CheckCircle, Crosshair } from 'lucide-react';
 import type { StaffProfile } from '@/types/marketplace';
 
 // Fix Leaflet default icon issue with Next.js
@@ -111,6 +111,45 @@ function RecenterMap({ center }: { center: [number, number] }) {
   return null;
 }
 
+// Component for recenter button
+function RecenterButton({ center }: { center: [number, number] | null }) {
+  const map = useMap();
+
+  const handleRecenter = () => {
+    if (center) {
+      map.setView(center, 13, { animate: true });
+    }
+  };
+
+  if (!center) return null;
+
+  return (
+    <button
+      onClick={handleRecenter}
+      className="leaflet-control-zoom-in"
+      style={{
+        position: 'absolute',
+        top: '120px',
+        right: '10px',
+        zIndex: 1000,
+        width: '30px',
+        height: '30px',
+        backgroundColor: 'white',
+        border: '2px solid rgba(0,0,0,0.2)',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        boxShadow: '0 1px 5px rgba(0,0,0,0.4)',
+      }}
+      title="Re-center map"
+    >
+      <Crosshair className="w-4 h-4 text-gray-700" />
+    </button>
+  );
+}
+
 interface MapViewProps {
   staff: (StaffProfile & { distance?: number })[];
   userLocation: { lat: number; lng: number } | null;
@@ -120,7 +159,7 @@ interface MapViewProps {
 
 export default function MapView({ staff, userLocation, selectedStaff, onSelectStaff }: MapViewProps) {
   const [mapCenter, setMapCenter] = useState<[number, number]>([51.5074, -0.1278]); // Default to London
-  const [mapZoom, setMapZoom] = useState(11);
+  const [mapZoom, setMapZoom] = useState(12);
   const [isMounted, setIsMounted] = useState(false);
 
   // Ensure component is mounted before rendering map
@@ -132,7 +171,7 @@ export default function MapView({ staff, userLocation, selectedStaff, onSelectSt
   useEffect(() => {
     if (userLocation) {
       setMapCenter([userLocation.lat, userLocation.lng]);
-      setMapZoom(13);
+      setMapZoom(12);
     } else if (staff.length > 0 && staff[0].location?.coordinates) {
       // Default to first staff member's location
       setMapCenter([staff[0].location.coordinates.lat, staff[0].location.coordinates.lng]);
@@ -156,15 +195,18 @@ export default function MapView({ staff, userLocation, selectedStaff, onSelectSt
       <MapContainer
         center={mapCenter}
         zoom={mapZoom}
-        style={{ height: '100%', width: '100%', background: '#1a1a1a' }}
+        minZoom={10}
+        maxZoom={16}
+        style={{ height: '100%', width: '100%', background: '#e0f2fe' }}
         zoomControl={true}
       >
         <TileLayer
           attribution='&copy; <a href="https://carto.com/">CartoDB</a>'
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
         />
 
         <RecenterMap center={mapCenter} />
+        <RecenterButton center={userLocation} />
 
         {/* User Location Marker */}
         {userLocation && (
@@ -175,6 +217,40 @@ export default function MapView({ staff, userLocation, selectedStaff, onSelectSt
               </div>
             </Popup>
           </Marker>
+        )}
+
+        {/* Journey Line - Uber Style with outline effect */}
+        {selectedStaff && userLocation && selectedStaff.location?.coordinates && (
+          <>
+            {/* Outer darker line for depth */}
+            <Polyline
+              positions={[
+                [userLocation.lat, userLocation.lng],
+                [selectedStaff.location.coordinates.lat, selectedStaff.location.coordinates.lng]
+              ]}
+              pathOptions={{
+                color: '#0f766e',
+                weight: 6,
+                opacity: 0.4,
+                lineCap: 'round',
+                lineJoin: 'round'
+              }}
+            />
+            {/* Inner main line */}
+            <Polyline
+              positions={[
+                [userLocation.lat, userLocation.lng],
+                [selectedStaff.location.coordinates.lat, selectedStaff.location.coordinates.lng]
+              ]}
+              pathOptions={{
+                color: '#14b8a6',
+                weight: 3,
+                opacity: 1,
+                lineCap: 'round',
+                lineJoin: 'round'
+              }}
+            />
+          </>
         )}
 
         {/* Staff Markers */}
@@ -319,45 +395,26 @@ export default function MapView({ staff, userLocation, selectedStaff, onSelectSt
         })}
       </MapContainer>
 
-      {/* Staff Count Badge */}
-      <div className="absolute top-6 left-6 bg-gray-900/95 backdrop-blur-sm rounded-xl shadow-2xl border border-gray-700 px-4 py-3 z-[1000]">
-        <div className="flex items-center space-x-2">
-          <div className="w-10 h-10 bg-gradient-to-br from-teal-500 to-cyan-600 rounded-lg flex items-center justify-center">
-            <span className="text-white font-bold text-lg">{staff.length}</span>
-          </div>
-          <div>
-            <p className="text-xs text-gray-400">Available Staff</p>
-            <p className="text-sm font-semibold text-white">in this area</p>
-          </div>
+      {/* Available Staff Counter - Upper Right - DESKTOP ONLY */}
+      <div className="hidden md:block absolute top-6 right-6 bg-green-50 rounded-xl shadow-2xl border border-green-200 p-4 z-[1000]">
+        <div className="text-center">
+          <div className="text-3xl font-bold text-green-700">{staff.length}</div>
+          <div className="text-xs text-green-600 font-medium mt-1">Available Staff</div>
         </div>
       </div>
 
-      {/* Status Legend */}
-      <div className="absolute bottom-6 left-6 bg-gray-900/95 backdrop-blur-sm rounded-xl shadow-2xl border border-gray-700 p-3 z-[1000]">
-        <p className="text-xs font-semibold text-white mb-2">Status Legend</p>
-        <div className="space-y-1.5">
+      {/* Distance Badge - Uber Style */}
+      {selectedStaff && selectedStaff.distance !== undefined && (
+        <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-white rounded-full shadow-2xl border-2 border-teal-500 px-6 py-3 z-[1000]">
           <div className="flex items-center space-x-2">
-            <div className="w-4 h-4 rounded-full bg-green-500"></div>
-            <span className="text-xs text-gray-300">Available</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-4 h-4 rounded-full bg-amber-500"></div>
-            <span className="text-xs text-gray-300">⏳ Pending</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-4 h-4 rounded-full bg-blue-500"></div>
-            <span className="text-xs text-gray-300">✅ Accepted</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-4 h-4 rounded-full bg-red-500"></div>
-            <span className="text-xs text-gray-300">❌ Declined</span>
-          </div>
-          <div className="flex items-center space-x-2 pt-1.5 border-t border-gray-700 mt-1.5">
-            <div className="w-4 h-4 rounded-full bg-blue-400 border-2 border-white"></div>
-            <span className="text-xs text-gray-300">Your Location</span>
+            <MapPin className="w-5 h-5 text-teal-600" />
+            <div>
+              <div className="text-2xl font-bold text-gray-900">{selectedStaff.distance.toFixed(1)} km</div>
+              <div className="text-xs text-gray-600 font-medium">Distance to staff</div>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
